@@ -1,0 +1,44 @@
+{
+    "name": "bluefission/synthetiq",
+    "description": "Adaptive conversational AI system",
+    "license": "MIT",
+    "keywords": ["synthetiq", "ai", "nlp", "machine learning", "chatbot", "bot", "communication", "natural language processing"],
+    "authors": [
+        {
+            "name": "Devon Scott",
+            "email": "dscott@bluefission.com",
+            "homepage": "https://bluefission.com",
+            "role": "Developer"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/bluefission/develation"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/bluefission/automata"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "bluefission/develation": "^1.0.0-alpha",
+        "bluefission/automata": "dev-master",
+        "php-ai/php-ml": "^0.10.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.1@dev",
+        "php": ">=8.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "BlueFission\\SynthetIQ\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": { 
+            "BlueFission\\SynthetIQ\\Tests\\": "tests/" 
+        }
+    }
+}

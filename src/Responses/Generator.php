@@ -3,9 +3,11 @@
 namespace BlueFission\SynthetIQ\Responses;
 
 use BlueFission\SynthetIQ\Responses\IGenerator;
+use BlueFission\Automata\Intent\Intent;
+use BlueFission\Automata\Context;
 use BlueFission\HTML\Template;
 
-class Generator implements IResponseGenerator
+class Generator implements IGenerator
 {
     protected $_templates;
 
@@ -14,18 +16,24 @@ class Generator implements IResponseGenerator
         $this->_templates = new Template();
     }
 
-    public function generate(string $input, string $intent, array $context): string
+    public function generate(string $input, Intent $intent, Context $context): string
     {
         $templateContent = $this->selectTemplate($intent, $context);
-        $response = $this->_templates->contents($templateContent)->set('input', $input)->render();
+        $this->_templates->contents($templateContent);
+        $response = $this->_templates->set('input', $input)->render();
 
         return $response;
     }
 
-    protected function selectTemplate(string $intent, array $context): string
+    protected function generateStatement($input)
+    {
+        
+    }
+
+    protected function selectTemplate(Intent $intent, Context $context): string
     {
         // Example template selection logic
-        switch ($intent) {
+        switch ($intent->getLabel()) {
             case 'weather':
                 return "The weather today is {weather}.";
             case 'news':

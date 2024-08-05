@@ -7,24 +7,31 @@ use BlueFission\Automata\Language\{
     Documenter,
     Walker
 };
+use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
+use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 
 require 'vendor/autoload.php';
 
-$grammar = require 'sample_configs/rules.php';
-$tokens = require 'sample_configs/tokens.php';
+require 'sample_configs/skills.php';
 
-$interpreter = new Interpreter( 
+$grammar = require 'sample_configs/grammar.php';
+$tokens = require 'sample_configs/tokens.php';
+$documenter = require 'sample_configs/documenter.php';
+
+$interpreter = new Interpreter(
     new Grammar( 
         new StemmerLemmatizer(),
         $grammar['rules'],
         $grammar['commands'],
         $tokens
     ), 
-    new Documenter(), 
+    $documenter,
     new Walker()
 );
 
-$ai = new SynthetIQ( $interpreter );
+$analyzer = new KeywordTopicAnalyzer( new NaiveBayesTextClassification, 'models/ml/');
+
+$ai = new SynthetIQ( $interpreter, $analyzer );
 
 // if is running on command line
 if ( php_sapi_name() === 'cli' ) {
@@ -32,7 +39,7 @@ if ( php_sapi_name() === 'cli' ) {
     echo "----------------------------------\n";
 
     while (true) {
-        echo "You: ";
+        echo "\033[34mYou:\033[0m ";
         $handle = fopen("php://stdin", "r");
         $userMessage = trim(fgets($handle));
 
@@ -41,8 +48,13 @@ if ( php_sapi_name() === 'cli' ) {
             break;
         }
 
-        $response = $ai->getResponse($userMessage);
-        echo "AI: " . $response . "\n";
+        try {
+            $response = $ai->processInput($userMessage);
+        } catch (Exception $e) {
+            $response = $e->getMessage();
+        }
+
+        echo "\033[32mAI:\033[0m " . $response . PHP_EOL;
     }
 
     return;
@@ -55,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
     $userMessage = $input['message'];
 
-    $response = $ai->getResponse($userMessage);
-
+    $response = $ai->processInput($userMessage);
     echo json_encode(['response' => $response]);
+
     exit;
 }
 ?>

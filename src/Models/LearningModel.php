@@ -48,7 +48,7 @@ class LearningModel {
 
         $prediction = $this->classifier->predict([implode(' ', $tokens)]);
 
-        return $prediction[0];
+        return $prediction;
     }
 
     public function loadModel($filePath) {

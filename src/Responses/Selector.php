@@ -3,6 +3,7 @@
 namespace BlueFission\SynthetIQ\Responses;
 
 use BlueFission\Arr;
+use BlueFission\Automata\Context;
 use BlueFission\Automata\DecisionTree\DecisionTree;
 use BlueFission\Automata\DecisionTree\DepthFirstMethod;
 use BlueFission\Automata\DecisionTree\Node;
@@ -17,12 +18,12 @@ class Selector
         $this->buildDecisionTree();
     }
 
-    public function select(array $responses, array $context): string
+    public function select(array $responses, Context $context): string
     {
         $method = new DepthFirstMethod();
         $selectedNode = $method->traverse($this->_decisionTree->getRoot());
 
-        return $selectedNode ? $selectedNode->getValue()['response'] : $responses[array_rand($responses)];
+        return $selectedNode ? $selectedNode['response'] : $responses[array_rand($responses)];
     }
 
     protected function buildDecisionTree(): void
@@ -40,7 +41,7 @@ class Selector
 
     public function evaluateNode(array $value): int
     {
-        // Example evaluation function
-        return rand(0, 100); // A placeholder evaluation function that returns a random score
+        // return an integer value between 0 and 10
+        return random_int(0, 10);
     }
 }

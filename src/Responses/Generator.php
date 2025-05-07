@@ -6,6 +6,7 @@ use BlueFission\SynthetIQ\Responses\IGenerator;
 use BlueFission\Automata\Intent\Intent;
 use BlueFission\Automata\Context;
 use BlueFission\HTML\Template;
+use BlueFission\Collections\Collection;
 
 class Generator implements IGenerator
 {
@@ -13,33 +14,49 @@ class Generator implements IGenerator
 
     public function __construct()
     {
-        $this->_templates = new Template();
+        $this->_templates = [];
     }
 
     public function generate(string $input, Intent $intent, Context $context): string
     {
         $templateContent = $this->selectTemplate($intent, $context);
-        $this->_templates->contents($templateContent);
-        $response = $this->_templates->set('input', $input)->render();
-
+        $template = new Template();
+        $template->contents($templateContent);
+        $response = $template->set('input', $input)->render();
+        
         return $response;
+
+        // $templateContents = $this->selectTemplates($intent, $context);
+        // foreach ($templateContents as $templateContent) {
+        //     $template = new Template();
+        //     $template->contents($templateContent);
+        //     $responses[] = $template->set('input', $input)->render();
+        // }
+
+        // return $responses;
+    }
+
+    public function addTemplate($label, $statement)
+    {
+        $this->_templates[$label][] = $statement;
     }
 
     protected function generateStatement($input)
     {
-        
+        // Will attempt to generate novel statements where no templates apply
     }
 
     protected function selectTemplate(Intent $intent, Context $context): string
     {
-        // Example template selection logic
-        switch ($intent->getLabel()) {
-            case 'weather':
-                return "The weather today is {weather}.";
-            case 'news':
-                return "The latest news is {news}.";
-            default:
-                return "I didn't understand that.";
-        }
+        $label = $intent->getLabel();
+
+        return (new Collection($this->_templates[$label] ?? []))->rand() ?? '';
+    }
+
+    protected function selectTemplates(Intent $intent, Context $context): array
+    {
+        $label = $intent->getLabel();
+
+        return $this->_templates[$label] ?? [];
     }
 }

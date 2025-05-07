@@ -14,6 +14,7 @@ require 'vendor/autoload.php';
 
 require 'sample_configs/skills.php';
 
+$dialogue = require 'sample_configs/dialogue.php';
 $grammar = require 'sample_configs/grammar.php';
 $tokens = require 'sample_configs/tokens.php';
 $documenter = require 'sample_configs/documenter.php';
@@ -32,6 +33,14 @@ $interpreter = new Interpreter(
 $analyzer = new KeywordTopicAnalyzer( new NaiveBayesTextClassification, 'models/ml/');
 
 $ai = new SynthetIQ( $interpreter, $analyzer );
+
+foreach ($dialogue as $category=>$info) {
+    foreach ($info[1] as $statement) {
+        $ai->addRoute($statement, $category, $info[0]);
+    }
+}
+
+echo "\n";
 
 // if is running on command line
 if ( php_sapi_name() === 'cli' ) {

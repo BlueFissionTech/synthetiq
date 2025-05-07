@@ -18,6 +18,8 @@ return  [
     'quick' => ['T_MODIFIER', 'T_DESCRIPTOR', 'T_ENTITY'],
     'ly' => ['T_SUFFIX'],
     '.' => ['T_PUNCTUATION'],
+    '?' => ['T_PUNCTUATION'],
+    '!' => ['T_PUNCTUATION'],
     'the' => ['T_INDICATOR'],
     'not' => ['T_NEGATION'],
     'now' => ['T_ENTITY'],

@@ -40,5 +40,10 @@
         "psr-4": { 
             "BlueFission\\SynthetIQ\\Tests\\": "tests/" 
         }
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     }
 }

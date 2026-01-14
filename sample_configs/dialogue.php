@@ -673,4 +673,15 @@ return [
 		],
 		['goal', 'objective', 'aim', 'purpose', 'accomplish']
 	),
+    'unknown.intent' => array(
+        ['request clarification', 'acknowledgement'],
+        [
+            "I'm not sure I understand.",
+            "I didn't catch that. Could you rephrase?",
+            "I'm still learning. Can you say that another way?",
+            "Sorry, I don't have enough context for that yet.",
+            "Could you give me a little more detail?",
+        ],
+        []
+    ),
 ];

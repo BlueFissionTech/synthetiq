@@ -34,18 +34,33 @@ class Selector
     {
         $this->_context = $context;
 
+        if (empty($responses)) {
+            return '';
+        }
+
         $responses = array_keys($responses);
+        $this->_depth = 0;
+        $this->_useSingleTokenKey = $this->_maxSingleTokenKeyPatterns;
 
         $this->buildDecisionTree($input, $responses);
 
         $selectedNode = $this->_decisionTree->decide(new DepthFirstMethod());
 
-        return $selectedNode ? $selectedNode['response'] : $responses[array_rand($responses)];
+        // Only return a response that was explicitly provided as a candidate.
+        if ($selectedNode && in_array($selectedNode['response'], $responses, true)) {
+            return $selectedNode['response'];
+        }
+
+        return $responses[array_rand($responses)];
     }
 
     protected function buildDecisionTree($input, $samples): void
     {
         // Example decision tree building logic
+        if (empty($samples)) {
+            return;
+        }
+
         $defaultResponse = $samples[array_rand($samples)];
         $rootNode = new Node(['response' => $defaultResponse], $this->_evalutation);
 
@@ -55,7 +70,9 @@ class Selector
         }, $samples);
 
         if (empty($firstWords)) {
-            $firstWords[] = $this->_predictor->predictBeginning();
+            if (method_exists($this->_predictor, 'predictBeginning')) {
+                $firstWords[] = $this->_predictor->predictBeginning();
+            }
         }
 
         if (empty($firstWords)) 
@@ -66,7 +83,7 @@ class Selector
         for($i = 0; $i < $count; $i++) {
             $token = $firstWords[$i];
             $value = $token;
-            $newNode = new Node(['response' => $input], $this->_evalutation);
+            $newNode = new Node(['response' => $value], $this->_evalutation);
             $this->buildDecisionTreeRecursive($newNode, $token);
 
             $rootNode->addChild($newNode);
@@ -82,12 +99,31 @@ class Selector
     // recursive function
     protected function buildDecisionTreeRecursive(&$node, $input): void
     {
-        $tokens = $this->_predictor->predictNextWords($input);
+        $tokens = [];
+        if (method_exists($this->_predictor, 'predictNextWords')) {
+            $tokens = $this->_predictor->predictNextWords($input);
+        } elseif (method_exists($this->_predictor, 'predictNextWord')) {
+            for ($i = 0; $i < $this->_maxChildren; $i++) {
+                $next = $this->_predictor->predictNextWord($input);
+                if ($next) {
+                    $tokens[] = $next;
+                }
+            }
+            $tokens = array_values(array_unique($tokens));
+        }
 
         if (empty($tokens) && $this->_depth < 8 && $this->_useSingleTokenKey > 0) {
             $this->_useSingleTokenKey--;
             $lastWord = explode(' ', $input);
-            $tokens = $this->_predictor->predictNextWords(end($lastWord));
+            $lastWord = end($lastWord);
+            if (method_exists($this->_predictor, 'predictNextWords')) {
+                $tokens = $this->_predictor->predictNextWords($lastWord);
+            } elseif (method_exists($this->_predictor, 'predictNextWord')) {
+                $next = $this->_predictor->predictNextWord($lastWord);
+                if ($next) {
+                    $tokens = [$next];
+                }
+            }
         }
 
         // var_dump($input, $tokens);

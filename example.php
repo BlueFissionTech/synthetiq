@@ -15,9 +15,15 @@ require 'vendor/autoload.php';
 require 'sample_configs/skills.php';
 
 $dialogue = require 'sample_configs/dialogue.php';
+$intentBoosts = require 'sample_configs/intent_boosts.php';
 $grammar = require 'sample_configs/grammar.php';
 $tokens = require 'sample_configs/tokens.php';
 $documenter = require 'sample_configs/documenter.php';
+
+$modelDir = __DIR__ . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'ml' . DIRECTORY_SEPARATOR;
+if (!is_dir($modelDir)) {
+    mkdir($modelDir, 0777, true);
+}
 
 $interpreter = new Interpreter(
     new Grammar( 
@@ -30,27 +36,93 @@ $interpreter = new Interpreter(
     new Walker()
 );
 
-$analyzer = new KeywordTopicAnalyzer( new NaiveBayesTextClassification, 'models/ml/');
+$analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
 
 $ai = new SynthetIQ( $interpreter, $analyzer );
+// Default fallback if selection yields no response.
+$fallbackResponse = "I'm not sure how to respond to that yet.";
 
-foreach ($dialogue as $category=>$info) {
-    foreach ($info[1] as $statement) {
-        $ai->addRoute($statement, $category, $info[0]);
+function normalizeKeywords(array $keywords, array $exclude = []): array
+{
+    $excludeSet = [];
+    foreach ($exclude as $value) {
+        $excludeSet[strtolower(trim((string)$value))] = true;
     }
+
+    $normalized = [];
+    foreach ($keywords as $keyword) {
+        $keyword = strtolower(trim((string)$keyword));
+        if ($keyword === '' || isset($excludeSet[$keyword])) {
+            continue;
+        }
+        $normalized[$keyword] = true;
+    }
+
+    return array_keys($normalized);
 }
 
-echo "\n";
+function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = []): void
+{
+    $stopwords = ['how', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'on', 'in'];
+    $total = 0;
+    foreach ($dialogue as $info) {
+        $total += count($info[1]);
+    }
+
+    $current = 0;
+    foreach ($dialogue as $category => $info) {
+        $boost = $intentBoosts[$category] ?? [];
+        $keywords = $info[2] ?? [];
+        if (!empty($boost['keywords'])) {
+            $keywords = array_merge($keywords, $boost['keywords']);
+        }
+        $exclude = $boost['exclude'] ?? [];
+        $keywords = normalizeKeywords($keywords, array_merge($stopwords, $exclude));
+        $priorityBase = $boost['priority'] ?? null;
+        $ai->addIntentKeywords($category, $keywords, $priorityBase);
+
+        foreach ($info[1] as $statement) {
+            $ai->addRoute($statement, $category, $info[0]);
+            $current++;
+            if ($current % 50 === 0 || $current === $total) {
+                $percent = (int)round(($current / $total) * 100);
+                echo "\rTraining: {$current}/{$total} ({$percent}%)";
+                if (function_exists('flush')) {
+                    flush();
+                }
+            }
+        }
+    }
+    echo "\rTraining: {$total}/{$total} (100%)\n";
+}
+
+trainRoutes($ai, $dialogue, $intentBoosts);
 
 // if is running on command line
 if ( php_sapi_name() === 'cli' ) {
+    $args = array_slice($argv, 1);
+    if (!empty($args)) {
+        $userMessage = trim(implode(' ', $args));
+        $response = $ai->processInput($userMessage);
+        if ($response === '') {
+            $response = $fallbackResponse;
+        }
+        echo "You: {$userMessage}\n";
+        echo "AI: {$response}\n";
+        exit;
+    }
+
     echo "SynthetIQ Chat System (type 'exit' to quit)\n";
     echo "----------------------------------\n";
 
+    $handle = fopen("php://stdin", "r");
     while (true) {
-        echo "\033[34mYou:\033[0m ";
-        $handle = fopen("php://stdin", "r");
-        $userMessage = trim(fgets($handle));
+        echo "You: ";
+        $userMessage = trim(fgets($handle) ?: '');
+
+        if ($userMessage === '') {
+            continue;
+        }
 
         if (strtolower($userMessage) === 'exit') {
             echo "Goodbye!\n";
@@ -63,20 +135,34 @@ if ( php_sapi_name() === 'cli' ) {
             $response = $e->getMessage();
         }
 
-        echo "\033[32mAI:\033[0m " . $response . PHP_EOL;
+        if ($response === '') {
+            $response = $fallbackResponse;
+        }
+
+        echo "AI: " . $response . PHP_EOL;
     }
 
-    return;
+    fclose($handle);
+    exit;
 }
 
 // if is post request
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($method === 'POST') {
     header('Content-Type: application/json');
 
     $input = json_decode(file_get_contents('php://input'), true);
-    $userMessage = $input['message'];
+    $userMessage = $input['message'] ?? '';
+    if (!is_string($userMessage) || trim($userMessage) === '') {
+        http_response_code(400);
+        echo json_encode(['response' => $fallbackResponse]);
+        exit;
+    }
 
     $response = $ai->processInput($userMessage);
+    if ($response === '') {
+        $response = $fallbackResponse;
+    }
     echo json_encode(['response' => $response]);
 
     exit;
@@ -147,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="chat-container">
         <div class="messages" id="messages"></div>
         <form id="chatForm">
-            <input type="text" id="userMessage" placeholder="Type your message here...">
+            <input type="text" id="userMessage" placeholder="Type your message here..." autocomplete="off">
             <button type="submit">Send</button>
         </form>
     </div>

@@ -19,12 +19,17 @@
         {
             "type": "vcs",
             "url": "https://github.com/bluefission/automata"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/BlueFissionTech/simpleclients"
         }
     ],
     "minimum-stability": "dev",
     "require": {
         "bluefission/develation": "^1.0.0-alpha",
         "bluefission/automata": "dev-master",
+        "bluefission/simpleclients": "dev-master",
         "php-ai/php-ml": "^0.10.0"
     },
     "require-dev": {

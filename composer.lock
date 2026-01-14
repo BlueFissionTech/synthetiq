@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "88ca8818dd3b32e8b10a174b6ab4314a",
+    "content-hash": "b4a6b99a94433943494ffbb6ccf463e9",
     "packages": [
         {
             "name": "bluefission/automata",
@@ -12,16 +12,17 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/BlueFissionTech/automata.git",
-                "reference": "4130d2784f7b100b25b13d4592402b50256e75b5"
+                "reference": "6a8eddd56cfdbeca9ea7fe1b2aa63671f5aafe3f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/BlueFissionTech/automata/zipball/4130d2784f7b100b25b13d4592402b50256e75b5",
-                "reference": "4130d2784f7b100b25b13d4592402b50256e75b5",
+                "url": "https://api.github.com/repos/BlueFissionTech/automata/zipball/6a8eddd56cfdbeca9ea7fe1b2aa63671f5aafe3f",
+                "reference": "6a8eddd56cfdbeca9ea7fe1b2aa63671f5aafe3f",
                 "shasum": ""
             },
             "require": {
                 "bluefission/develation": "^1.2.0-alpha",
+                "bluefission/simpleclients": "dev-master",
                 "google-gemini-php/client": "*",
                 "orhanerday/open-ai": "^2.2",
                 "php-ai/php-ml": "^0.10.0",
@@ -30,6 +31,9 @@
             "require-dev": {
                 "php": ">=8.0.0",
                 "phpunit/phpunit": "^11.1@dev"
+            },
+            "suggest": {
+                "ext-ds": "Improves performance for collection types (Deque, Map, Set, Stack, PriorityQueue, Vector). Optional; Automata falls back when absent."
             },
             "default-branch": true,
             "type": "library",
@@ -65,20 +69,20 @@
                 "source": "https://github.com/BlueFissionTech/automata/tree/master",
                 "issues": "https://github.com/BlueFissionTech/automata/issues"
             },
-            "time": "2026-01-09T13:37:09+00:00"
+            "time": "2026-01-13T16:06:15+00:00"
         },
         {
             "name": "bluefission/develation",
-            "version": "v1.3.1-alpha",
+            "version": "v1.3.4-alpha",
             "source": {
                 "type": "git",
                 "url": "https://github.com/BlueFissionTech/develation.git",
-                "reference": "407c0bcedf9be5d33caa4fb58499e71f99faaf89"
+                "reference": "23686a8380093091c96b271eed5433d3c97eaca1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/407c0bcedf9be5d33caa4fb58499e71f99faaf89",
-                "reference": "407c0bcedf9be5d33caa4fb58499e71f99faaf89",
+                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/23686a8380093091c96b271eed5433d3c97eaca1",
+                "reference": "23686a8380093091c96b271eed5433d3c97eaca1",
                 "shasum": ""
             },
             "require": {
@@ -127,10 +131,63 @@
                 "php"
             ],
             "support": {
-                "source": "https://github.com/BlueFissionTech/develation/tree/v1.3.1-alpha",
+                "source": "https://github.com/BlueFissionTech/develation/tree/v1.3.4-alpha",
                 "issues": "https://github.com/BlueFissionTech/develation/issues"
             },
-            "time": "2026-01-09T13:15:04+00:00"
+            "time": "2026-01-12T23:17:14+00:00"
+        },
+        {
+            "name": "bluefission/simpleclients",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/BlueFissionTech/simpleclients.git",
+                "reference": "6ed036a0a54176ab2d92478523ea21bab9a94ebd"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/BlueFissionTech/simpleclients/zipball/6ed036a0a54176ab2d92478523ea21bab9a94ebd",
+                "reference": "6ed036a0a54176ab2d92478523ea21bab9a94ebd",
+                "shasum": ""
+            },
+            "require": {
+                "bluefission/develation": "^1.0.0-alpha",
+                "simplehtmldom/simplehtmldom": "^2.0@RC"
+            },
+            "require-dev": {
+                "php": ">=8.0.0",
+                "phpunit/phpunit": "^11.1@dev"
+            },
+            "default-branch": true,
+            "type": "package",
+            "autoload": {
+                "psr-4": {
+                    "BlueFission\\": "src/"
+                },
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Devon Scott",
+                    "email": "dscott@bluefission.com",
+                    "homepage": "https://bluefission.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Simple Client Wrappers For BlueFission",
+            "keywords": [
+                "clients, api, http, services"
+            ],
+            "support": {
+                "source": "https://github.com/BlueFissionTech/simpleclients/tree/master",
+                "issues": "https://github.com/BlueFissionTech/simpleclients/issues"
+            },
+            "time": "2026-01-13T14:50:27+00:00"
         },
         {
             "name": "cboden/ratchet",
@@ -1456,6 +1513,81 @@
             "time": "2025-10-15T07:30:20+00:00"
         },
         {
+            "name": "simplehtmldom/simplehtmldom",
+            "version": "2.0-RC2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/simplehtmldom/simplehtmldom.git",
+                "reference": "3c87726400e59d8e1bc4709cfe82353abeb0f4d1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/simplehtmldom/simplehtmldom/zipball/3c87726400e59d8e1bc4709cfe82353abeb0f4d1",
+                "reference": "3c87726400e59d8e1bc4709cfe82353abeb0f4d1",
+                "shasum": ""
+            },
+            "require": {
+                "ext-iconv": "*",
+                "php": ">=5.6"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^6 || ^7"
+            },
+            "suggest": {
+                "ext-curl": "Needed to support cURL downloads in class HtmlWeb",
+                "ext-mbstring": "Allows better decoding for multi-byte documents",
+                "ext-openssl": "Allows loading HTTPS pages when using cURL"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "./"
+                ],
+                "exclude-from-classmap": [
+                    "/example/",
+                    "/manual/",
+                    "/testcase/",
+                    "/tests/",
+                    "simple_html_dom.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "S.C. Chen",
+                    "role": "Developer"
+                },
+                {
+                    "name": "John Schlick",
+                    "role": "Developer"
+                },
+                {
+                    "name": "logmanoriginal",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A fast, simple and reliable HTML document parser for PHP.",
+            "homepage": "https://simplehtmldom.sourceforge.io/",
+            "keywords": [
+                "Simple",
+                "dom",
+                "html",
+                "parser",
+                "php",
+                "simplehtmldom"
+            ],
+            "support": {
+                "issues": "https://sourceforge.net/p/simplehtmldom/bugs/",
+                "rss": "https://sourceforge.net/p/simplehtmldom/news/feed.rss",
+                "source": "https://sourceforge.net/p/simplehtmldom/repository/",
+                "wiki": "https://simplehtmldom.sourceforge.io/docs/"
+            },
+            "time": "2019-11-09T15:42:50+00:00"
+        },
+        {
             "name": "symfony/deprecation-contracts",
             "version": "dev-main",
             "source": {
@@ -2051,12 +2183,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/routing.git",
-                "reference": "5d3fd7adf8896c2fdb54e2f0f35b1bcbd9e45090"
+                "reference": "0798827fe2c79caeed41d70b680c2c3507d10147"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/routing/zipball/5d3fd7adf8896c2fdb54e2f0f35b1bcbd9e45090",
-                "reference": "5d3fd7adf8896c2fdb54e2f0f35b1bcbd9e45090",
+                "url": "https://api.github.com/repos/symfony/routing/zipball/0798827fe2c79caeed41d70b680c2c3507d10147",
+                "reference": "0798827fe2c79caeed41d70b680c2c3507d10147",
                 "shasum": ""
             },
             "require": {
@@ -2128,7 +2260,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2025-12-19T10:00:43+00:00"
+            "time": "2026-01-12T12:19:02+00:00"
         },
         {
             "name": "symfony/service-contracts",
@@ -2848,12 +2980,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sebastianbergmann/phpunit.git",
-                "reference": "fc9b0a96b203a6c760d7a997bfaf8b14ccaea715"
+                "reference": "1d230f2fe44be129d0c0e0b2632d056456438177"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/fc9b0a96b203a6c760d7a997bfaf8b14ccaea715",
-                "reference": "fc9b0a96b203a6c760d7a997bfaf8b14ccaea715",
+                "url": "https://api.github.com/repos/sebastianbergmann/phpunit/zipball/1d230f2fe44be129d0c0e0b2632d056456438177",
+                "reference": "1d230f2fe44be129d0c0e0b2632d056456438177",
                 "shasum": ""
             },
             "require": {
@@ -2949,7 +3081,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-01-04T06:49:04+00:00"
+            "time": "2026-01-13T15:05:47+00:00"
         },
         {
             "name": "sebastian/cli-parser",
@@ -4166,6 +4298,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "bluefission/automata": 20,
+        "bluefission/simpleclients": 20,
         "phpunit/phpunit": 20
     },
     "prefer-stable": false,

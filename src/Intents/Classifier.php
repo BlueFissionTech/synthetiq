@@ -8,6 +8,7 @@ use BlueFission\Automata\Analysis\IAnalyzer;
 use BlueFission\Automata\Intent\{Intent, Matcher};
 use BlueFission\Automata\Context;
 use BlueFission\Arr;
+use BlueFission\Str;
 
 class Classifier implements IClassifier
 {
@@ -22,34 +23,54 @@ class Classifier implements IClassifier
 
     public function classify(string $input, Context $context): ?Intent
     {
-        $scores = $this->_matcher->match($input, $context);
+        try {
+            $scores = $this->_matcher->match($input, $context);
+        } catch (\Throwable $e) {
+            $scores = null;
+        }
 
-        if (! $scores) {
+        if (!$scores instanceof Arr || $scores->count() === 0) {
             $label = $this->naiveClassify($input);
+            if (!$label) {
+                return null;
+            }
+
             return $this->_matcher->getIntent($label);
         }
 
-        return $this->_matcher->getIntent( $scores->keys()->get(0) );
+        $label = $scores->keys()->get(0);
+        if (!$label) {
+            return null;
+        }
+
+        return $this->_matcher->getIntent($label);
     }
 
-    private function naiveClassify(string $input): string
+    private function naiveClassify(string $input): ?string
     {
-        $keywords = $this->_extractor->object($input);
         $intents = $this->_matcher->getIntents();
         $intentLabels = Arr::keys($intents);
 
         foreach($intentLabels as $label) {
             $intent = $intents[$label];
             $criteria = $intent->getCriteria();
-            $keywords = Arr::map(function ($keyword) {
-                return $keyword['word'];
-            }, $criteria['keywords']);
+            $criteriaKeywords = $criteria['keywords'] ?? [];
+            if (empty($criteriaKeywords)) {
+                continue;
+            }
 
-            $matches = Arr::intersect($keywords, Str::split($input)->val());
+            $keywords = array_map(function ($keyword) {
+                return $keyword['word'] ?? null;
+            }, $criteriaKeywords);
+            $keywords = array_filter($keywords);
 
-            if (Arr::size($matches) > 0) {
+            $matches = array_intersect($keywords, Str::split($input));
+
+            if (!empty($matches)) {
                 return $label;
             }
         }
+
+        return null;
     }
 }

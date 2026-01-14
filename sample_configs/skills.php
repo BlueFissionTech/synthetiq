@@ -11,8 +11,30 @@ use BlueFission\SynthetIQ\Skills\HowAreYouResponseSkill;
 use BlueFission\SynthetIQ\Skills\TimeAndDateSkill;
 use BlueFission\SynthetIQ\Skills\WeatherSkill;
 use BlueFission\SynthetIQ\Skills\NewsSkill;
+use BlueFission\SynthetIQ\Clients\LocationClientInterface;
+use BlueFission\SynthetIQ\Clients\NewsClientInterface;
+use BlueFission\SynthetIQ\Clients\WeatherClientInterface;
 
-$matcher = new Matcher( new KeywordTopicAnalyzer( new NaiveBayesTextClassification, 'model.ml') );
+$modelDir = __DIR__ . '/../models/ml/';
+if (!is_dir($modelDir)) {
+    mkdir($modelDir, 0777, true);
+}
+
+$matcher = new Matcher(new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir));
+
+$clientBindings = require __DIR__ . '/clients.php';
+$clientInstances = [];
+foreach ($clientBindings as $interface => $class) {
+    if (strpos($class, 'OpenWeatherClient') !== false && !function_exists('env')) {
+        continue;
+    }
+    if (class_exists($class)) {
+        $clientInstances[$interface] = new $class();
+    }
+}
+$locationClient = $clientInstances[LocationClientInterface::class] ?? null;
+$weatherClient = $clientInstances[WeatherClientInterface::class] ?? null;
+$newsClient = $clientInstances[NewsClientInterface::class] ?? null;
 
 $greetingIntent = new Intent('greeting.response', 'Greeting Response', [
     'keywords' => [
@@ -123,7 +145,7 @@ $weatherIntent = new Intent('weather.response', 'Weather Response', [
     ],
 ]);
 
-// $weatherSkill = new WeatherSkill();
+// $weatherSkill = new WeatherSkill($weatherClient, $locationClient);
 $matcher
     // ->registerSkill($weatherSkill)
     ->registerIntent($weatherIntent);
@@ -145,7 +167,7 @@ $newsIntent = new Intent('news.response', 'News Response', [
     ],
 ]);
 
-// $newsSkill = new NewsSkill();
+// $newsSkill = new NewsSkill($newsClient, $locationClient);
 $matcher
     // ->registerSkill($newsSkill)
     ->registerIntent($newsIntent);
@@ -287,3 +309,5 @@ $catchAllIntent = new Intent('catchall.response', 'Catch All Response', [
 
 // $catchAllSkill = new CatchAllResponseSkill();
 $matcher->registerIntent($catchAllIntent);
+
+return $matcher;

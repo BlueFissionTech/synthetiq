@@ -9,6 +9,7 @@ use BlueFission\Automata\Intent\{Intent, Matcher};
 use BlueFission\Automata\Context;
 use BlueFission\Arr;
 use BlueFission\Str;
+use BlueFission\Collections\Collection;
 
 class Classifier implements IClassifier
 {
@@ -21,7 +22,7 @@ class Classifier implements IClassifier
         $this->_matcher = new Matcher($analyzer);
     }
 
-    public function classify(string $input, Context $context): ?Intent
+    public function score(string $input, Context $context): ?Arr
     {
         try {
             $scores = $this->_matcher->match($input, $context);
@@ -29,21 +30,38 @@ class Classifier implements IClassifier
             $scores = null;
         }
 
-        if (!$scores instanceof Arr || $scores->count() === 0) {
-            $label = $this->naiveClassify($input);
-            if (!$label) {
-                return null;
-            }
+        return $scores instanceof Arr ? $scores : null;
+    }
 
-            return $this->_matcher->getIntent($label);
-        }
+    public function classify(string $input, Context $context): ?Intent
+    {
+        $scores = $this->score($input, $context);
 
-        $label = $scores->keys()->get(0);
+        return $this->classifyFromScores($input, $context, $scores);
+    }
+
+    public function classifyFromScores(string $input, Context $context, ?Arr $scores): ?Intent
+    {
+        $label = $this->labelFromScores($input, $scores);
         if (!$label) {
             return null;
         }
 
         return $this->_matcher->getIntent($label);
+    }
+
+    public function labelFromScores(string $input, ?Arr $scores): ?string
+    {
+        if (!$scores instanceof Arr || $scores->count() === 0) {
+            return $this->naiveClassify($input);
+        }
+
+        $label = $scores->keys()->get(0);
+        if (!$label) {
+            return $this->naiveClassify($input);
+        }
+
+        return $label;
     }
 
     private function naiveClassify(string $input): ?string
@@ -59,12 +77,16 @@ class Classifier implements IClassifier
                 continue;
             }
 
-            $keywords = array_map(function ($keyword) {
-                return $keyword['word'] ?? null;
-            }, $criteriaKeywords);
-            $keywords = array_filter($keywords);
+            $keywords = (new Collection($criteriaKeywords))
+                ->map(function ($keyword) {
+                    return $keyword['word'] ?? null;
+                })
+                ->filter(function ($keyword) {
+                    return $keyword !== null && $keyword !== '';
+                })
+                ->toArray();
 
-            $matches = array_intersect($keywords, Str::split($input));
+            $matches = Arr::intersect($keywords, Str::split($input));
 
             if (!empty($matches)) {
                 return $label;

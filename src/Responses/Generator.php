@@ -22,7 +22,20 @@ class Generator implements IGenerator
         $templateContent = $this->selectTemplate($intent, $context);
         $template = new Template();
         $template->contents($templateContent);
-        $response = $template->set('input', $input)->render();
+        $template->set('input', $input);
+        $template->set('intent', $intent->getLabel());
+        $contextData = (new Collection($context->all()))
+            ->filter(static function ($value) {
+                if (is_array($value)) {
+                    return !empty($value);
+                }
+                return $value !== null && $value !== '';
+            })
+            ->toArray();
+        if (!empty($contextData)) {
+            $template->set('context', $contextData);
+        }
+        $response = $template->render();
         
         return $response;
 

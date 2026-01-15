@@ -23,13 +23,13 @@ yet implemented are marked as "not implemented".
 
 - Multi-turn conversation flow adheres to route transitions. (Not implemented)
 - Context biasing prefers recent intent clusters. (Not implemented)
-- Short-term memory recalls relevant episodes. (Not implemented)
+- Short-term memory recalls relevant episodes. (Partial)
 - Persona/tone persistence across turns. (Not implemented)
 
 ## Memory and Context Tests
 
-- Holoscene memory writes each exchange. (Not implemented)
-- ABS memory similarity retrieves related inputs. (Not implemented)
+- Holoscene memory writes each exchange. (Partial)
+- ABS memory similarity retrieves related inputs. (Partial)
 - Language `Walker` attaches entity roles to memory entries. (Not implemented)
 
 ## Performance Tests
@@ -41,13 +41,13 @@ yet implemented are marked as "not implemented".
 
 ## Resilience and Safety Tests
 
-- Unknown intent triggers LLM fallback only below confidence threshold. (Not implemented)
+- Unknown intent triggers LLM fallback only below confidence threshold. (Partial)
 - LLM fallback responses are logged and gated. (Not implemented)
 - Safety filter blocks disallowed intents and content. (Not implemented)
 
 ## Dataset and Evaluation Tests
 
-- Intent evaluation suite accuracy threshold. (Partial)
+- Intent evaluation suite accuracy threshold. (Implemented)
 - Confusion matrix regression snapshot. (Not implemented)
 - Cross-domain dataset coverage report. (Not implemented)
 

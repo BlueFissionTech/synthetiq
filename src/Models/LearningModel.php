@@ -6,6 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Language\MarkovPredictor;
 use BlueFission\Automata\Collections\OrganizedCollection;
 use BlueFission\Str;
+use BlueFission\Arr;
 
 class LearningModel
 {
@@ -36,7 +37,7 @@ class LearningModel
     public function observe(string $input, string $response, ?Context $context = null): void
     {
         $input = $this->normalize($input);
-        $response = trim($response);
+        $response = Str::trim($response);
 
         if ($input === '' || $response === '') {
             return;
@@ -122,10 +123,10 @@ class LearningModel
 
     protected function normalize(string $text): string
     {
-        $text = strtolower(trim($text));
+        $text = Str::lower(Str::trim($text));
         $text = preg_replace("/[^a-z0-9\\s\\-'.!?]/", '', $text);
 
-        return trim(preg_replace('/\\s+/', ' ', $text));
+        return Str::trim(preg_replace('/\\s+/', ' ', $text));
     }
 
     protected function tokenize(string $text): array
@@ -182,7 +183,7 @@ class LearningModel
             return '';
         }
 
-        $words = preg_split('/\\s+/', trim($seed));
+        $words = preg_split('/\\s+/', Str::trim($seed));
         $sentence = $seed;
 
         while (count($words) < $this->max_sentence_length) {
@@ -199,7 +200,7 @@ class LearningModel
             }
         }
 
-        return trim($sentence);
+        return Str::trim($sentence);
     }
 
     protected function findClosestInput(string $normalized): ?string
@@ -218,7 +219,7 @@ class LearningModel
                 continue;
             }
 
-            $common = array_intersect($tokens, $keyTokens);
+            $common = Arr::intersect($tokens, $keyTokens);
             $score = count($common) / max(count($tokens), count($keyTokens));
             if ($score > $bestScore) {
                 $bestScore = $score;

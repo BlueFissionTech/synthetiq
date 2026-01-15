@@ -7,6 +7,8 @@ use BlueFission\Data\Log;
 use BlueFission\System\Machine;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
+use BlueFission\Arr;
+use BlueFission\Str;
 
 class StatusSkill extends BaseSkill
 {
@@ -22,7 +24,7 @@ class StatusSkill extends BaseSkill
         $machine = new Machine();
         $log = Log::instance();
         $log->config(['file'=>OPUS_ROOT.'storage/error.log']);
-        $userMessage = strtolower($context->get('message') ?? "");
+        $userMessage = Str::lower($context->get('message') ?? "");
 
         $recentLogMessages = $this->getRecentLogMessages($log);
         $eventLogs = ''; // Retrieve recent event logs here
@@ -35,8 +37,9 @@ class StatusSkill extends BaseSkill
     private function getRecentLogMessages($log)
     {
         $logData = $log->read();
-        $recentLogMessages = implode("\n", array_slice(explode("\n", $logData), -10));
-        return $recentLogMessages;
+        $logLines = Str::split((string)$logData, "\n");
+        $recentLogMessages = Arr::slice($logLines, -10);
+        return implode("\n", $recentLogMessages);
     }
 
     public function response(): string

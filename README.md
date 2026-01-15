@@ -16,6 +16,8 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 3. Responses are generated from templates attached to those intents.
 4. A decision tree and trigram Markov predictor score and select a response.
 5. Conversation history and context update for follow-up turns.
+6. Optional memory and fallback hooks can bias intent selection or route to a
+   low-confidence fallback.
 
 ## Install
 
@@ -78,6 +80,8 @@ These rely on the Composer package `bluefission/simpleclients`.
 - `BlueFission\SynthetIQ\Responses\Selector`: selects responses using a decision tree and prediction heuristics.
 - `BlueFission\SynthetIQ\ConversationHistory`: stores input/response pairs.
 - `BlueFission\SynthetIQ\Skills\*`: optional Automata skills for common responses.
+- `BlueFission\SynthetIQ\Memory\*`: pluggable short-term memory adapters.
+- `BlueFission\SynthetIQ\Fallback\*`: low-confidence fallback responders.
 
 ## Routing and Templates
 

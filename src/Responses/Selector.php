@@ -7,6 +7,8 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\DecisionTree\DecisionTree;
 use BlueFission\Automata\DecisionTree\DepthFirstMethod;
 use BlueFission\Automata\DecisionTree\Node;
+use BlueFission\Collections\Collection;
+use BlueFission\Str;
 
 class Selector
 {
@@ -38,7 +40,7 @@ class Selector
             return '';
         }
 
-        $responses = array_keys($responses);
+        $responses = Arr::keys($responses);
         $this->_depth = 0;
         $this->_useSingleTokenKey = $this->_maxSingleTokenKeyPatterns;
 
@@ -51,7 +53,7 @@ class Selector
             return $selectedNode['response'];
         }
 
-        return $responses[array_rand($responses)];
+        return (new Collection($responses))->rand();
     }
 
     protected function buildDecisionTree($input, $samples): void
@@ -61,13 +63,19 @@ class Selector
             return;
         }
 
-        $defaultResponse = $samples[array_rand($samples)];
+        $defaultResponse = (new Collection($samples))->rand();
         $rootNode = new Node(['response' => $defaultResponse], $this->_evalutation);
 
         // Get the most likely first words as nodes from the default responses
-        $firstWords = array_map(function($response) {
-            return explode(' ', $response)[0];
-        }, $samples);
+        $firstWords = (new Collection($samples))
+            ->map(function ($response) {
+                $tokens = Str::split($response, ' ');
+                return $tokens[0] ?? '';
+            })
+            ->filter(function ($word) {
+                return $word !== '';
+            })
+            ->toArray();
 
         if (empty($firstWords)) {
             if (method_exists($this->_predictor, 'predictBeginning')) {
@@ -109,13 +117,13 @@ class Selector
                     $tokens[] = $next;
                 }
             }
-            $tokens = array_values(array_unique($tokens));
+            $tokens = array_values(Arr::unique($tokens));
         }
 
         if (empty($tokens) && $this->_depth < 8 && $this->_useSingleTokenKey > 0) {
             $this->_useSingleTokenKey--;
-            $lastWord = explode(' ', $input);
-            $lastWord = end($lastWord);
+            $lastWord = (new Collection(Str::split($input, ' ')))->last();
+            $lastWord = (string)($lastWord ?: '');
             if (method_exists($this->_predictor, 'predictNextWords')) {
                 $tokens = $this->_predictor->predictNextWords($lastWord);
             } elseif (method_exists($this->_predictor, 'predictNextWord')) {
@@ -140,7 +148,7 @@ class Selector
             $newNode = new Node(['response' => $value], $this->_evalutation);
             $node->addChild($newNode);
 
-            if ($this->_depth <= $this->_maxDepth && !preg_match('/[.!?]$/', trim($value)) && strlen($value) < 100) {
+            if ($this->_depth <= $this->_maxDepth && !preg_match('/[.!?]$/', Str::trim($value)) && Str::len($value) < 100) {
                 $this->_depth++;
                 $this->buildDecisionTreeRecursive($newNode, $value);
                 $this->_depth--;

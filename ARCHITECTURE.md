@@ -28,6 +28,10 @@ Automata and Develation for language, memory, and orchestration primitives.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
+8. **Memory + fallback hooks**
+   - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
+   - `FallbackResponderInterface` provides a low-confidence fallback path
+     (e.g., quantized LLM) with audit hooks.
 
 ## Data Surfaces
 

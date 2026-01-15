@@ -4,6 +4,7 @@ namespace BlueFission\SynthetIQ\Skills;
 
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
+use BlueFission\Collections\Collection;
 
 class GoodbyeResponseSkill extends BaseSkill
 {
@@ -37,7 +38,7 @@ class GoodbyeResponseSkill extends BaseSkill
             "Can I assist you with anything else?",
         ];
 
-        $randomQuestion = $questions[array_rand($questions)];
+        $randomQuestion = (new Collection($questions))->rand();
 
         if ($name) {
             $this->response = "{$farewell}, {$name}! {$randomQuestion}";

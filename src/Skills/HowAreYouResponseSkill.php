@@ -5,6 +5,9 @@ namespace BlueFission\SynthetIQ\Skills;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
 use BlueFission\System\Machine;
+use BlueFission\Arr;
+use BlueFission\Collections\Collection;
+use BlueFission\Str;
 
 class HowAreYouResponseSkill extends BaseSkill
 {
@@ -32,12 +35,12 @@ class HowAreYouResponseSkill extends BaseSkill
             return;
         }
 
-        $userMessage = strtolower($context->get('message') ?? "");
+        $userMessage = Str::lower($context->get('message') ?? "");
         $feelingsKeywords = ['I\'m', 'I am', 'fine'];
 
         $userMentionedFeelings = false;
         foreach ($feelingsKeywords as $keyword) {
-            if (strpos($userMessage, $keyword) !== false) {
+            if (Str::pos($userMessage, $keyword) !== false) {
                 $userMentionedFeelings = true;
                 break;
             }
@@ -45,7 +48,7 @@ class HowAreYouResponseSkill extends BaseSkill
 
         if ($cpuUsage > 80 || $memoryUsage > 0.8 * $memoryPeakUsage) {
             $this->response = "I'm not doing well, my system resources are being heavily utilized.";
-        } elseif (count($context->get('history')) > 100 || in_array('ErrorState', $context->get('state'))) {
+        } elseif (count($context->get('history')) > 100 || Arr::has($context->get('state'), 'ErrorState')) {
             $this->response = "I'm not doing well, there have been some errors and my history is quite long.";
         } else {
             $this->response = "I'm doing well, thank you! My system resources are in good condition and there are no major issues.";
@@ -53,7 +56,7 @@ class HowAreYouResponseSkill extends BaseSkill
 
         if (!$userMentionedFeelings) {
             $howAreYouPhrases = ["How are you?", "And you?", "How are you doing?", "How are you today?", "What about you?"];
-            $randomPhrase = $howAreYouPhrases[array_rand($howAreYouPhrases)];
+            $randomPhrase = (new Collection($howAreYouPhrases))->rand();
             $this->response .= " " . $randomPhrase;
         }
     }

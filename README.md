@@ -18,6 +18,7 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 5. Conversation history and context update for follow-up turns.
 6. Optional memory and fallback hooks can bias intent selection or route to a
    low-confidence fallback.
+7. Optional spell correction can normalize near-miss tokens before routing.
 
 ## Install
 
@@ -132,6 +133,11 @@ $diagnostics = $router->lastDiagnostics();
 - This library is not a generative model. It predicts and selects from known statements.
 - Some skills (weather/news/status) depend on external services or app-specific globals and should be wired explicitly or excluded in lightweight deployments.
 - `src/Models/LearningModel.php` is optional and not yet integrated with `SynthetIQ`.
+- Spell correction is lightweight and vocabulary-driven. You can disable it with:
+
+```php
+$ai->enableSpellCorrection(false);
+```
 
 ## Testing
 

@@ -92,6 +92,25 @@ class SynthetIQTest extends TestCase
         $this->assertSame("I'm not sure I understand.", $response);
     }
 
+    public function testCorrectsMisspelledInput(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'hello' => ['greeting.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello there', 'reply.intent', []);
+
+        $response = $ai->processInput('hellp');
+
+        $this->assertSame('Hello there', $response);
+        $context = $this->readProperty($ai, '_context');
+        $this->assertSame('hellp', $context->get('input_original'));
+        $this->assertSame('hello', $context->get('input_corrected'));
+    }
+
     public function testAddIntentKeywordsRegistersCriteria(): void
     {
         $analyzer = new FakeAnalyzer([]);

@@ -12,8 +12,9 @@ use BlueFission\SynthetIQ\Responses\Selector;
 use BlueFission\Automata\Analysis\IAnalyzer;
 use BlueFission\Automata\Intent\Matcher;
 use BlueFission\Automata\Language\ContractionNormalizer;
-use BlueFission\Automata\Language\TrigramMarkovPredictor;
 use BlueFission\SynthetIQ\Models\LearningModel;
+use BlueFission\SynthetIQ\Language\BoundedTrigramPredictor;
+use BlueFission\SynthetIQ\Language\SpellCorrector;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
@@ -39,6 +40,8 @@ class SynthetIQ
     protected $_memoryAdapter;
     protected $_fallbackResponder;
     protected $_confidenceThreshold = 0.35;
+    protected $_spellCorrector;
+    protected bool $_spellCorrectionEnabled = true;
 
     public function __construct(
         IInterpreter $interpreter,
@@ -55,12 +58,13 @@ class SynthetIQ
         $this->_matcher = new Matcher($analyzer);
         $this->_intentClassifier = new IntelligenceRouter($analyzer, $this->_matcher, $routerOptions);
         $this->_responseGenerator = new Generator();
-        $this->_predictor = new TrigramMarkovPredictor();
+        $this->_predictor = new BoundedTrigramPredictor();
         $this->_routes = [];
         $this->_interpreter = $interpreter;
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
@@ -88,9 +92,26 @@ class SynthetIQ
         $this->_confidenceThreshold = $threshold;
     }
 
+    public function enableSpellCorrection(bool $enabled): void
+    {
+        $this->_spellCorrectionEnabled = $enabled;
+        if ($this->_spellCorrector) {
+            $this->_spellCorrector->enable($enabled);
+        }
+    }
+
+    public function setSpellCorrector(?SpellCorrector $corrector): void
+    {
+        $this->_spellCorrector = $corrector;
+        if ($this->_spellCorrector) {
+            $this->_spellCorrector->enable($this->_spellCorrectionEnabled);
+        }
+    }
+
     public function processInput(string $input): string
     {
         $input = ContractionNormalizer::normalize($input);
+        $input = $this->normalizeInput($input);
         // Run the input through the interpreter, it will produce an output
         $this->_interpreter->run(Str::lower($input));
 
@@ -216,12 +237,15 @@ class SynthetIQ
         if (!isset($this->_routes[$type])) {
             $this->_routes[$type] = $to;
         } elseif (!empty($to)) {
-            $this->_routes[$type] = Arr::merge($this->_routes[$type], $to);
+            $existingRoutes = is_array($this->_routes[$type]) ? $this->_routes[$type] : [$this->_routes[$type]];
+            $this->_routes[$type] = array_values(Arr::unique(array_merge($existingRoutes, $to)));
         }
 
         if ($statement !== '') {
             $this->_predictor->addSentence($statement);
         }
+
+        $this->updateSpellVocabulary((string)$statement);
 
         if ($this->_intentClassifier instanceof IntelligenceRouter) {
             $this->_intentClassifier->markDirty();
@@ -249,6 +273,8 @@ class SynthetIQ
             $priority = $this->computePriority($keyword, $priorityBase ?? 12);
             $intent->addCriteria('keywords', ['word' => $keyword, 'priority' => $priority]);
         }
+
+        $this->updateSpellVocabulary($keywords);
 
         if ($this->_intentClassifier instanceof IntelligenceRouter) {
             $this->_intentClassifier->markDirty();
@@ -301,6 +327,39 @@ class SynthetIQ
 
         $denom = $topScore + $secondScore;
         return $denom > 0.0 ? ($topScore / $denom) : 0.0;
+    }
+
+    protected function normalizeInput(string $input): string
+    {
+        if (!$this->_spellCorrector || !$this->_spellCorrectionEnabled) {
+            return $input;
+        }
+
+        $normalized = $this->_spellCorrector->normalize($input);
+        if ($normalized !== $input) {
+            $this->_context->set('input_original', $input);
+            $this->_context->set('input_corrected', $normalized);
+            Dev::do('synthetiq.input.corrected', [
+                'original' => $input,
+                'corrected' => $normalized,
+            ]);
+        }
+
+        return $normalized;
+    }
+
+    protected function updateSpellVocabulary($terms): void
+    {
+        if (!$this->_spellCorrector) {
+            return;
+        }
+
+        if (is_array($terms)) {
+            $this->_spellCorrector->addTerms($terms);
+            return;
+        }
+
+        $this->_spellCorrector->addText((string)$terms);
     }
 
     protected function determineFallbackReason(?Intent $intent, ?Arr $scores, float $confidence, bool $allowLowConfidence): ?string

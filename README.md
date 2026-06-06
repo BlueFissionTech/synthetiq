@@ -94,6 +94,33 @@ Routes are built by registering statements for an intent label. Each statement b
 
 This keeps behavior simple, repeatable, and easy to customize.
 
+`RouteTrainer` centralizes route catalog registration, boost keyword handling,
+progress events, stable cache-key generation, and compiled route-state
+serialization:
+
+```php
+use BlueFission\SynthetIQ\Training\RouteTrainer;
+
+$state = RouteTrainer::compile($dialogue, $intentBoosts, [
+    'grammar' => $grammar,
+    'tokens' => $tokens,
+]);
+
+RouteTrainer::saveState($state, __DIR__ . '/models/routes.json');
+
+if (RouteTrainer::stateMatches($state, $dialogue, $intentBoosts, ['grammar' => $grammar, 'tokens' => $tokens])) {
+    RouteTrainer::apply($ai, $state);
+}
+```
+
+The route-state example can be used as a non-interactive rollout smoke command:
+
+```bash
+php examples/route_state.php --write --state=models/routes/synthetiq_routes.json
+php examples/route_state.php --state=models/routes/synthetiq_routes.json
+php examples/route_state.php --state=models/routes/synthetiq_routes.json --apply --probe=hello
+```
+
 ## Intent Routing Strategies
 
 `SynthetIQ` uses `IntelligenceRouter` by default. The router trains lightweight

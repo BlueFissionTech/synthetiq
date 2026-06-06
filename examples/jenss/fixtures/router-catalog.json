@@ -1,0 +1,50 @@
+{
+  "scenario": {
+    "id": "synthetiq-router-stress",
+    "name": "SynthetIQ JenSS router stress",
+    "goal": {
+      "name": "Keep dialogue routing bounded and explainable"
+    },
+    "initiative": {
+      "name": "Declarative conversation fixtures"
+    }
+  },
+  "subject": {
+    "role": "conversation_router",
+    "type": "library"
+  },
+  "efficacy_assessment": {
+    "current_level": "partial"
+  },
+  "utterances": [
+    "hello there",
+    "good morning",
+    "what is the system status",
+    "are services healthy",
+    "show weather for tomorrow",
+    "forecast next week",
+    "what can you remember",
+    "do you know my last request",
+    "gibberish route probe"
+  ],
+  "labels": [
+    "greeting.intent",
+    "greeting.intent",
+    "status.intent",
+    "status.intent",
+    "weather.intent",
+    "weather.intent",
+    "memory.intent",
+    "memory.intent",
+    "unknown.intent"
+  ],
+  "templates": [
+    "Hello. How can I help?",
+    "The system is operational.",
+    "Weather requests require a configured client.",
+    "I can use recent context when memory is available.",
+    "I need a clearer route before taking action."
+  ],
+  "probe": "weather status tomorrow",
+  "fallback_probe": "colorless syntax pineapple"
+}

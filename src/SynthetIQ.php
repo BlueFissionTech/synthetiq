@@ -6,7 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Intent;
 use BlueFission\Automata\Language\IInterpreter;
 use BlueFission\SynthetIQ\ConversationHistory;
-use BlueFission\SynthetIQ\Intents\Classifier;
+use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
 use BlueFission\SynthetIQ\Responses\Generator;
 use BlueFission\SynthetIQ\Responses\Selector;
 use BlueFission\Automata\Analysis\IAnalyzer;
@@ -46,14 +46,15 @@ class SynthetIQ
         ?LearningModel $learningModel = null,
         ?MemoryAdapterInterface $memoryAdapter = null,
         ?FallbackResponderInterface $fallbackResponder = null,
-        ?float $confidenceThreshold = null
+        ?float $confidenceThreshold = null,
+        array $routerOptions = []
     )
     {
         $this->_context = new Context();
         $this->_history = new ConversationHistory();
-        $this->_intentClassifier = new Classifier( $analyzer );
-        $this->_responseGenerator = new Generator();
         $this->_matcher = new Matcher($analyzer);
+        $this->_intentClassifier = new IntelligenceRouter($analyzer, $this->_matcher, $routerOptions);
+        $this->_responseGenerator = new Generator();
         $this->_predictor = new TrigramMarkovPredictor();
         $this->_routes = [];
         $this->_interpreter = $interpreter;
@@ -221,6 +222,10 @@ class SynthetIQ
         if ($statement !== '') {
             $this->_predictor->addSentence($statement);
         }
+
+        if ($this->_intentClassifier instanceof IntelligenceRouter) {
+            $this->_intentClassifier->markDirty();
+        }
     }
 
     public function addIntentKeywords(string $type, array $keywords, ?int $priorityBase = null): void
@@ -243,6 +248,10 @@ class SynthetIQ
 
             $priority = $this->computePriority($keyword, $priorityBase ?? 12);
             $intent->addCriteria('keywords', ['word' => $keyword, 'priority' => $priority]);
+        }
+
+        if ($this->_intentClassifier instanceof IntelligenceRouter) {
+            $this->_intentClassifier->markDirty();
         }
     }
 

@@ -75,7 +75,8 @@ These rely on the Composer package `bluefission/simpleclients`.
 ## Core Components
 
 - `BlueFission\SynthetIQ\SynthetIQ`: orchestrates interpretation, intent classification, response generation, and selection.
-- `BlueFission\SynthetIQ\Intents\Classifier`: matches input to known intents with fallback keyword checks.
+- `BlueFission\SynthetIQ\Intents\IntelligenceRouter`: combines matcher, keyword overlap, and optional Naive Bayes strategies.
+- `BlueFission\SynthetIQ\Intents\Classifier`: provides baseline intent matching and fallback keyword checks.
 - `BlueFission\SynthetIQ\Responses\Generator`: renders template-based responses.
 - `BlueFission\SynthetIQ\Responses\Selector`: selects responses using a decision tree and prediction heuristics.
 - `BlueFission\SynthetIQ\ConversationHistory`: stores input/response pairs.
@@ -92,6 +93,39 @@ Routes are built by registering statements for an intent label. Each statement b
 - training data for the trigram predictor.
 
 This keeps behavior simple, repeatable, and easy to customize.
+
+## Intent Routing Strategies
+
+`SynthetIQ` uses `IntelligenceRouter` by default. The router trains lightweight
+strategies from registered route keywords, combines their scores, and exposes
+diagnostics for review:
+
+```php
+$ai = new SynthetIQ($interpreter, $analyzer, null, null, null, null, [
+    'strategy_weights' => [
+        'matcher' => 1.0,
+        'keyword_overlap' => 0.75,
+        'naive_bayes' => 0.5,
+    ],
+    'strategy_thresholds' => [
+        'matcher' => 0.2,
+        'keyword_overlap' => 0.1,
+    ],
+]);
+```
+
+For direct router use:
+
+```php
+use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
+
+$router = new IntelligenceRouter($analyzer, null, [
+    'enable_naive_bayes' => false,
+]);
+
+$scores = $router->score('hello there', $context);
+$diagnostics = $router->lastDiagnostics();
+```
 
 ## Notes and Constraints
 

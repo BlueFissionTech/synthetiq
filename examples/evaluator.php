@@ -17,6 +17,11 @@ use BlueFission\Automata\Language\{
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Language\ContractionNormalizer;
+use BlueFission\Arr;
+use BlueFission\Data\FileSystem;
+use BlueFission\Func;
+use BlueFission\Num;
+use BlueFission\Val;
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../sample_configs/skills.php';
@@ -32,7 +37,7 @@ function parseOptions(array $argv, array $defaults): array
 {
     $options = $defaults;
     if (!class_exists(Args::class) || !class_exists(OptionDefinition::class)) {
-        if (isset($argv[1])) {
+        if (Val::is($argv[1] ?? null)) {
             $options['top'] = (int)$argv[1];
         }
         return $options;
@@ -68,7 +73,7 @@ function parseOptions(array $argv, array $defaults): array
 
     $parser->parse($argv);
     $parsed = $parser->options();
-    if (!empty($parsed['help'])) {
+    if (Val::isNotEmpty($parsed['help'] ?? null)) {
         $command = $argv[0] ?? 'evaluator.php';
         echo $parser->usage($command) . PHP_EOL;
         exit(0);
@@ -99,7 +104,7 @@ function buildProgressReporter(int $total, bool $enabled): callable
         if ($current % 50 === 0 || $current >= $total) {
             $percent = (int)round(($current / $total) * 100);
             echo "\rTraining: {$current}/{$total} ({$percent}%)";
-            if (function_exists('flush')) {
+            if (Func::isCallable('flush')) {
                 flush();
             }
             if ($current >= $total) {
@@ -118,8 +123,13 @@ $defaults = [
 $options = parseOptions($_SERVER['argv'] ?? $argv ?? [], $defaults);
 
 $modelDir = $options['model-dir'] ?? $defaults['model-dir'];
-if (!is_dir($modelDir)) {
-    mkdir($modelDir, 0777, true);
+$files = new FileSystem();
+$modelParent = dirname($modelDir);
+if (!$files->exists($modelParent)) {
+    $files->mkdir($modelParent);
+}
+if (!$files->exists($modelDir)) {
+    $files->mkdir($modelDir);
 }
 
 $interpreter = new Interpreter(
@@ -155,7 +165,7 @@ if ($options['train']) {
     });
 }
 
-$total = count($cases);
+$total = Arr::count($cases);
 $correct = 0;
 $confusion = [];
 
@@ -185,8 +195,12 @@ echo "Accuracy: " . number_format($accuracy, 2) . "%\n\n";
 
 foreach ($confusion as $expected => $predictions) {
     arsort($predictions);
-    $topCount = max(1, (int)($options['top'] ?? 3));
-    $top = array_slice($predictions, 0, $topCount, true);
+    $topCount = (int)Num::max(1, (int)($options['top'] ?? 3));
+    $topLabels = Arr::slice(Arr::keys($predictions), 0, $topCount);
+    $top = [];
+    foreach ($topLabels as $label) {
+        $top[$label] = $predictions[$label];
+    }
     $summary = [];
     foreach ($top as $label => $count) {
         $summary[] = "{$label}={$count}";

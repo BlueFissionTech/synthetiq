@@ -7,7 +7,7 @@ namespace BlueFission\SynthetIQ\Training;
 use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\Arr;
 use BlueFission\Collections\Collection;
-use BlueFission\Data\FileSystem;
+use BlueFission\Data\File;
 use BlueFission\Func;
 use BlueFission\Net\HTTP;
 use BlueFission\Num;
@@ -175,7 +175,7 @@ class RouteTrainer
      */
     public static function loadState(string $path): array
     {
-        if (!FileSystem::fileExists($path)) {
+        if (!(new File())->exists($path)) {
             throw new RuntimeException("Route training state not found: {$path}");
         }
 

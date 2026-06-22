@@ -251,12 +251,12 @@ class RouteTrainer
     {
         $excludeSet = [];
         foreach ($exclude as $value) {
-            $excludeSet[Str::lower(Str::trim((string)$value))] = true;
+            $excludeSet[Str::make((string)$value)->trim()->lower()->val()] = true;
         }
 
         $normalized = [];
         foreach ($keywords as $keyword) {
-            $keyword = Str::lower(Str::trim((string)$keyword));
+            $keyword = Str::make((string)$keyword)->trim()->lower()->val();
             if (Val::isEmpty($keyword) || Arr::hasKey($excludeSet, $keyword)) {
                 continue;
             }
@@ -377,10 +377,19 @@ class RouteTrainer
             $normalized[$key] = self::normalize($item);
         }
 
-        if (!array_is_list($normalized)) {
+        if (!self::isList($normalized)) {
             ksort($normalized);
         }
 
         return $normalized;
+    }
+
+    protected static function isList(array $value): bool
+    {
+        if (Val::isEmpty($value)) {
+            return true;
+        }
+
+        return Arr::keys($value) === range(0, Arr::count($value) - 1);
     }
 }

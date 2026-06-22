@@ -6,6 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Strategy\Strategy;
 use BlueFission\Arr;
+use BlueFission\Data\FileSystem;
 use BlueFission\Net\HTTP;
 use BlueFission\Num;
 use BlueFission\Str;
@@ -169,7 +170,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
             $sample = Str::trim((string)$samples[$i]);
             $label = Str::trim((string)$labels[$i]);
 
-            if ($sample === '' || $label === '') {
+            if (Val::isEmpty($sample) || Val::isEmpty($label)) {
                 continue;
             }
 
@@ -209,7 +210,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
 
         $dir = $this->_cacheDir ?: 'models';
         $dir = rtrim($dir, "/\\");
-        if ($dir === '') {
+        if (Val::isEmpty($dir)) {
             $dir = 'models';
         }
 
@@ -229,7 +230,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
     protected function tryLoadCachedModel(): bool
     {
         $modelPath = $this->resolveModelPath();
-        if (Val::isEmpty($modelPath) || !file_exists($modelPath)) {
+        if (Val::isEmpty($modelPath) || !FileSystem::fileExists($modelPath)) {
             return false;
         }
 
@@ -283,20 +284,20 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
 
     protected function cacheKeyMatches(): bool
     {
-        if ($this->_cacheKey === '') {
+        if (Val::isEmpty($this->_cacheKey)) {
             return true;
         }
 
         $meta = $this->readCacheMeta();
         $cacheKey = (string)($meta['cache_key'] ?? '');
 
-        return $cacheKey !== '' && hash_equals($cacheKey, $this->_cacheKey);
+        return Val::isNotEmpty($cacheKey) && hash_equals($cacheKey, $this->_cacheKey);
     }
 
     protected function cacheAccuracy(): float
     {
         $meta = $this->readCacheMeta();
-        if (!isset($meta['accuracy'])) {
+        if (!Arr::hasKey($meta, 'accuracy')) {
             return 0.0;
         }
 
@@ -310,7 +311,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         $metaPath = $this->cacheMetaPath();
-        if (Val::isEmpty($metaPath) || !file_exists($metaPath)) {
+        if (Val::isEmpty($metaPath) || !FileSystem::fileExists($metaPath)) {
             $this->_cacheMeta = [];
             return $this->_cacheMeta;
         }

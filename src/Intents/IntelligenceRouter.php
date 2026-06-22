@@ -111,12 +111,12 @@ class IntelligenceRouter extends Classifier
 
     public function setStrategyWeight(string $name, float $weight): void
     {
-        $this->_strategyWeights[$name] = max(0.0, $weight);
+        $this->_strategyWeights[$name] = Num::max(0.0, $weight);
     }
 
     public function setStrategyThreshold(string $name, float $threshold): void
     {
-        $this->_strategyThresholds[$name] = max(0.0, $threshold);
+        $this->_strategyThresholds[$name] = Num::max(0.0, $threshold);
     }
 
     protected function registerDefaultStrategies(array $options): void
@@ -167,8 +167,8 @@ class IntelligenceRouter extends Classifier
         $this->_needsTraining = false;
 
         Dev::do('synthetiq.intent.router.trained', [
-            'samples' => count($samples),
-            'labels' => count($labels),
+            'samples' => Arr::count($samples),
+            'labels' => Arr::count($labels),
         ]);
     }
 
@@ -181,13 +181,13 @@ class IntelligenceRouter extends Classifier
         foreach ($intents as $label => $intent) {
             $criteria = $intent->getCriteria();
             $keywords = $criteria['keywords'] ?? [];
-            if (empty($keywords)) {
+            if (Val::isEmpty($keywords)) {
                 continue;
             }
 
             foreach ($keywords as $keyword) {
                 $word = Str::trim((string)($keyword['word'] ?? ''));
-                if ($word === '') {
+                if (Val::isEmpty($word)) {
                     continue;
                 }
 
@@ -249,7 +249,7 @@ class IntelligenceRouter extends Classifier
             $accepted = [];
 
             foreach ($scoreData as $label => $score) {
-                if (!is_numeric($score)) {
+                if (!Num::is($score)) {
                     continue;
                 }
 
@@ -276,7 +276,7 @@ class IntelligenceRouter extends Classifier
             arsort($combined);
         }
 
-        $diagnostics['blocked_by_threshold'] = $sawScores && empty($combined);
+        $diagnostics['blocked_by_threshold'] = $sawScores && Val::isEmpty($combined);
         $diagnostics['combined'] = $combined;
         $this->_lastDiagnostics = $diagnostics;
 

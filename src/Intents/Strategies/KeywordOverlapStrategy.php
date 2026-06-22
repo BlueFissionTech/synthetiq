@@ -120,7 +120,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
             $sample = (string)$samples[$i];
             $tokens = $this->tokenize($sample);
 
-            if (!isset($map[$label])) {
+            if (!Arr::hasKey($map, $label)) {
                 $map[$label] = [];
             }
 
@@ -144,7 +144,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
         $tokens = Str::split($input, ' ');
         $tokens = (new Collection($tokens))
             ->filter(function ($token) {
-                return $token !== '';
+                return Val::isNotEmpty($token);
             })
             ->toArray();
 

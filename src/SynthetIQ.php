@@ -21,7 +21,10 @@ use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
 use BlueFission\Arr;
+use BlueFission\Func;
+use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\DevElation as Dev;
 
 class SynthetIQ
@@ -119,16 +122,16 @@ class SynthetIQ
         $diagnostics = [];
         if (
             $this->_responseSelector
-            && method_exists($this->_responseSelector, 'lastDiagnostics')
+            && $this->canCall($this->_responseSelector, 'lastDiagnostics')
         ) {
             $diagnostics = $this->_responseSelector->lastDiagnostics();
         }
 
-        if (empty($diagnostics)) {
+        if (Val::isEmpty($diagnostics)) {
             return $this->baseResponsePredictorDiagnostics();
         }
 
-        return array_merge($this->baseResponsePredictorDiagnostics(), $diagnostics);
+        return Arr::merge($this->baseResponsePredictorDiagnostics(), $diagnostics);
     }
 
     public function processInput(string $input): string
@@ -176,9 +179,9 @@ class SynthetIQ
         }
 
         $responseTypes = $this->_routes[$intent->getLabel()] ?? [];
-        if (empty($responseTypes)) {
+        if (Val::isEmpty($responseTypes)) {
             $responseTypes = [$intent->getLabel()];
-        } elseif (!is_array($responseTypes)) {
+        } elseif (!Arr::is($responseTypes)) {
             $responseTypes = [$responseTypes];
         }
         $responses = [];
@@ -198,7 +201,7 @@ class SynthetIQ
             // var_dump($responseType, $intent, $value);
         }
 
-        if (empty($responses) && $intent->getLabel() !== 'unknown.intent') {
+        if (Val::isEmpty($responses) && $intent->getLabel() !== 'unknown.intent') {
             $responseTypes = ['unknown.intent'];
             $responseIntent = $this->_matcher->getIntent('unknown.intent');
             if ($responseIntent) {
@@ -213,7 +216,7 @@ class SynthetIQ
 
         $this->_input = $input;
         $response = '';
-        if (!empty($responses)) {
+        if (Val::isNotEmpty($responses)) {
             // Use selector scoring to choose a consistent response.
             $response = $this->_responseSelector->select($input, $responses, $this->_context);
             $this->recordResponsePredictorDiagnostics();
@@ -240,7 +243,7 @@ class SynthetIQ
     }
 
     public function addRoute($statement, $type, $to = []) {
-        if (!is_array($to)) {
+        if (!Arr::is($to)) {
             $to = [$to];
         }
 
@@ -258,15 +261,15 @@ class SynthetIQ
         //     $this->_responseGenerator->addTemplate($category, $statement);
         // }
 
-        if (!isset($this->_routes[$type])) {
+        if (!Arr::hasKey($this->_routes, $type)) {
             $this->_routes[$type] = $to;
-        } elseif (!empty($to)) {
-            $existingRoutes = is_array($this->_routes[$type]) ? $this->_routes[$type] : [$this->_routes[$type]];
-            $this->_routes[$type] = array_values(Arr::unique(array_merge($existingRoutes, $to)));
+        } elseif (Val::isNotEmpty($to)) {
+            $existingRoutes = Arr::is($this->_routes[$type]) ? $this->_routes[$type] : [$this->_routes[$type]];
+            $this->_routes[$type] = Arr::values(Arr::unique(Arr::merge($existingRoutes, $to)));
         }
 
-        if ($statement !== '') {
-            if (is_object($this->_predictor) && method_exists($this->_predictor, 'addSentence')) {
+        if (Val::isNotEmpty($statement)) {
+            if ($this->canCall($this->_predictor, 'addSentence')) {
                 $this->_predictor->addSentence($statement);
             }
         }
@@ -280,7 +283,7 @@ class SynthetIQ
 
     public function addIntentKeywords(string $type, array $keywords, ?int $priorityBase = null): void
     {
-        if (empty($keywords)) {
+        if (Val::isEmpty($keywords)) {
             return;
         }
 
@@ -292,7 +295,7 @@ class SynthetIQ
 
         foreach ($keywords as $keyword) {
             $keyword = Str::trim((string)$keyword);
-            if ($keyword === '') {
+            if (Val::isEmpty($keyword)) {
                 continue;
             }
 
@@ -318,19 +321,19 @@ class SynthetIQ
 
     protected function applyIntentBiases(?Arr $scores, array $biases): ?Arr
     {
-        if (!$scores instanceof Arr || empty($biases)) {
+        if (!$scores instanceof Arr || Val::isEmpty($biases)) {
             return $scores;
         }
 
         $updated = $scores->toArray();
         foreach ($biases as $label => $weight) {
-            if (!is_numeric($weight)) {
+            if (!Num::is($weight)) {
                 continue;
             }
             $updated[$label] = ($updated[$label] ?? 0.0) + (float)$weight;
         }
 
-        if (!empty($updated)) {
+        if (Val::isNotEmpty($updated)) {
             arsort($updated);
         }
 
@@ -343,7 +346,7 @@ class SynthetIQ
             return 0.0;
         }
 
-        $values = array_values($scores->toArray());
+        $values = Arr::values($scores->toArray());
         $topScore = (float)($values[0] ?? 0.0);
         $secondScore = (float)($values[1] ?? 0.0);
 
@@ -380,7 +383,7 @@ class SynthetIQ
             return;
         }
 
-        if (is_array($terms)) {
+        if (Arr::is($terms)) {
             $this->_spellCorrector->addTerms($terms);
             return;
         }
@@ -430,7 +433,7 @@ class SynthetIQ
 
         $response = $this->_fallbackResponder->respond($input, $this->_context, $meta);
 
-        if (is_string($response) && $response !== '') {
+        if (Str::is($response) && Val::isNotEmpty($response)) {
             $this->_context->set('fallback_used', true);
             $this->_context->set('fallback_reason', $reason);
             Dev::do('synthetiq.fallback.triggered', $meta);
@@ -492,9 +495,9 @@ class SynthetIQ
 
     protected function baseResponsePredictorDiagnostics(): array
     {
-        $canPredictNextWords = is_object($this->_predictor) && method_exists($this->_predictor, 'predictNextWords');
-        $canPredictNextWord = is_object($this->_predictor) && method_exists($this->_predictor, 'predictNextWord');
-        $canPredictBeginning = is_object($this->_predictor) && method_exists($this->_predictor, 'predictBeginning');
+        $canPredictNextWords = $this->canCall($this->_predictor, 'predictNextWords');
+        $canPredictNextWord = $this->canCall($this->_predictor, 'predictNextWord');
+        $canPredictBeginning = $this->canCall($this->_predictor, 'predictBeginning');
 
         $status = 'available';
         if ($this->_predictor === null) {
@@ -532,7 +535,7 @@ class SynthetIQ
         $score = 0;
         // echo $node['response'] . "\n";
         $expectedIntents = $this->_context->get('expected_intents') ?? [];
-        if (!is_array($expectedIntents)) {
+        if (!Arr::is($expectedIntents)) {
             $expectedIntents = [$expectedIntents];
         }
 
@@ -548,7 +551,7 @@ class SynthetIQ
             // echo "-- Interpreter match\n";
             $score += 2;
 
-            if (method_exists($this->_interpreter, 'tokenize') && method_exists($this->_interpreter, 'parse')) {
+            if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
                 $tokens = $this->_interpreter->tokenize($node['response']);
                 $output = $this->_interpreter->parse($tokens);
             }
@@ -577,19 +580,23 @@ class SynthetIQ
             Str::split($node['response'], ' '),
             Str::split($this->_input, ' ')
         );
-        if (count($sharedTokens) > 0) {
+        if (Arr::count($sharedTokens) > 0) {
             // echo "-- Token match\n";
             $score += 3;
         }
 
         // Short length penalty
         $length = Str::len($node['response']);
-        $penalty = 10 - max(0, $length - 10);
-        $score -= round($penalty / 2);
+        $penalty = 10 - Num::max(0, $length - 10);
+        $score -= Num::round($penalty / 2);
 
         // echo "\n";
 
         return $score;
     }
-}
 
+    protected function canCall($target, string $method): bool
+    {
+        return is_object($target) && Func::isCallable([$target, $method]);
+    }
+}

@@ -2,6 +2,11 @@
 
 namespace BlueFission\SynthetIQ\Language;
 
+use BlueFission\Arr;
+use BlueFission\Num;
+use BlueFission\Str;
+use BlueFission\Val;
+
 class BoundedTrigramPredictor
 {
     protected array $_states = [];
@@ -12,34 +17,37 @@ class BoundedTrigramPredictor
 
     public function __construct(array $options = [])
     {
-        $this->_maxStates = max(1, (int)($options['max_states'] ?? 10000));
-        $this->_maxBeginnings = max(1, (int)($options['max_beginnings'] ?? 1000));
-        $this->_maxTransitions = max(1, (int)($options['max_transitions'] ?? 100));
+        $this->_maxStates = (int)Num::max(1, (int)($options['max_states'] ?? 10000));
+        $this->_maxBeginnings = (int)Num::max(1, (int)($options['max_beginnings'] ?? 1000));
+        $this->_maxTransitions = (int)Num::max(1, (int)($options['max_transitions'] ?? 100));
     }
 
     public function addSentence(string $sentence): void
     {
         $words = $this->tokenize($sentence);
-        if (count($words) < 3) {
+        if (Arr::count($words) < 3) {
             return;
         }
 
         $this->rememberBeginning($words[0] . ' ' . $words[1]);
 
-        $count = count($words);
+        $count = Arr::count($words);
         for ($i = 2; $i < $count; $i++) {
             $trigram = $words[$i - 2] . ' ' . $words[$i - 1];
             $nextWord = $words[$i];
 
-            if (!isset($this->_states[$trigram]) && count($this->_states) >= $this->_maxStates) {
-                unset($this->_states[array_key_first($this->_states)]);
+            if (!Arr::hasKey($this->_states, $trigram) && Arr::count($this->_states) >= $this->_maxStates) {
+                $oldestState = Arr::keys($this->_states)[0] ?? null;
+                if (Val::is($oldestState)) {
+                    unset($this->_states[$oldestState]);
+                }
             }
 
-            if (!isset($this->_states[$trigram])) {
+            if (!Arr::hasKey($this->_states, $trigram)) {
                 $this->_states[$trigram] = [];
             }
 
-            if (!isset($this->_states[$trigram][$nextWord]) && count($this->_states[$trigram]) >= $this->_maxTransitions) {
+            if (!Arr::hasKey($this->_states[$trigram], $nextWord) && Arr::count($this->_states[$trigram]) >= $this->_maxTransitions) {
                 $lowest = $this->lowestWeightedKey($this->_states[$trigram]);
                 unset($this->_states[$trigram][$lowest]);
             }
@@ -51,8 +59,8 @@ class BoundedTrigramPredictor
     public function predictNextWord(string $sentence): ?string
     {
         $words = $this->tokenize($sentence);
-        $previousTwoWords = implode(' ', array_slice($words, -2));
-        if ($previousTwoWords === '' || empty($this->_states[$previousTwoWords])) {
+        $previousTwoWords = implode(' ', Arr::slice($words, -2));
+        if (Val::isEmpty($previousTwoWords) || Val::isEmpty($this->_states[$previousTwoWords] ?? null)) {
             return null;
         }
 
@@ -62,28 +70,31 @@ class BoundedTrigramPredictor
     public function predictNextWords(string $sentence, int $limit = 5): array
     {
         $words = $this->tokenize($sentence);
-        $previousTwoWords = implode(' ', array_slice($words, -2));
-        if ($previousTwoWords === '' || empty($this->_states[$previousTwoWords])) {
+        $previousTwoWords = implode(' ', Arr::slice($words, -2));
+        if (Val::isEmpty($previousTwoWords) || Val::isEmpty($this->_states[$previousTwoWords] ?? null)) {
             return [];
         }
 
         $candidates = $this->_states[$previousTwoWords];
         arsort($candidates);
 
-        return array_slice(array_keys($candidates), 0, max(1, $limit));
+        return Arr::slice(Arr::keys($candidates), 0, (int)Num::max(1, $limit));
     }
 
     public function tokenize(string $sentence): array
     {
-        $tokens = preg_split('/\s+/', strtolower(trim($sentence)), -1, PREG_SPLIT_NO_EMPTY);
+        $tokens = preg_split('/\s+/', Str::lower(Str::trim($sentence)), -1, PREG_SPLIT_NO_EMPTY);
 
-        return is_array($tokens) ? $tokens : [];
+        return Arr::is($tokens) ? $tokens : [];
     }
 
     protected function rememberBeginning(string $beginning): void
     {
-        if (!isset($this->_beginnings[$beginning]) && count($this->_beginnings) >= $this->_maxBeginnings) {
-            unset($this->_beginnings[array_key_first($this->_beginnings)]);
+        if (!Arr::hasKey($this->_beginnings, $beginning) && Arr::count($this->_beginnings) >= $this->_maxBeginnings) {
+            $oldestBeginning = Arr::keys($this->_beginnings)[0] ?? null;
+            if (Val::is($oldestBeginning)) {
+                unset($this->_beginnings[$oldestBeginning]);
+            }
         }
 
         $this->_beginnings[$beginning] = ($this->_beginnings[$beginning] ?? 0) + 1;
@@ -104,13 +115,17 @@ class BoundedTrigramPredictor
             }
         }
 
-        return (string)array_key_first($weights);
+        $keys = Arr::keys($weights);
+
+        return (string)($keys[0] ?? '');
     }
 
     protected function lowestWeightedKey(array $weights): string
     {
         asort($weights);
 
-        return (string)array_key_first($weights);
+        $keys = Arr::keys($weights);
+
+        return (string)($keys[0] ?? '');
     }
 }

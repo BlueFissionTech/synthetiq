@@ -68,8 +68,8 @@ class SynthetIQ
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
-     
-        $this->_responseSelector = new Selector($this->_predictor, [$this, 'evaluateNode']);
+
+        $this->refreshResponseSelector();
     }
 
     public function setMemoryAdapter(MemoryAdapterInterface $adapter): void
@@ -106,6 +106,29 @@ class SynthetIQ
         if ($this->_spellCorrector) {
             $this->_spellCorrector->enable($this->_spellCorrectionEnabled);
         }
+    }
+
+    public function setResponsePredictor($predictor): void
+    {
+        $this->_predictor = $predictor;
+        $this->refreshResponseSelector();
+    }
+
+    public function responsePredictorDiagnostics(): array
+    {
+        $diagnostics = [];
+        if (
+            $this->_responseSelector
+            && method_exists($this->_responseSelector, 'lastDiagnostics')
+        ) {
+            $diagnostics = $this->_responseSelector->lastDiagnostics();
+        }
+
+        if (empty($diagnostics)) {
+            return $this->baseResponsePredictorDiagnostics();
+        }
+
+        return array_merge($this->baseResponsePredictorDiagnostics(), $diagnostics);
     }
 
     public function processInput(string $input): string
@@ -193,6 +216,7 @@ class SynthetIQ
         if (!empty($responses)) {
             // Use selector scoring to choose a consistent response.
             $response = $this->_responseSelector->select($input, $responses, $this->_context);
+            $this->recordResponsePredictorDiagnostics();
         }
         $this->_input = '';
 
@@ -242,7 +266,9 @@ class SynthetIQ
         }
 
         if ($statement !== '') {
-            $this->_predictor->addSentence($statement);
+            if (is_object($this->_predictor) && method_exists($this->_predictor, 'addSentence')) {
+                $this->_predictor->addSentence($statement);
+            }
         }
 
         $this->updateSpellVocabulary((string)$statement);
@@ -457,6 +483,48 @@ class SynthetIQ
         }
 
         return $meta;
+    }
+
+    protected function refreshResponseSelector(): void
+    {
+        $this->_responseSelector = new Selector($this->_predictor, [$this, 'evaluateNode']);
+    }
+
+    protected function baseResponsePredictorDiagnostics(): array
+    {
+        $canPredictNextWords = is_object($this->_predictor) && method_exists($this->_predictor, 'predictNextWords');
+        $canPredictNextWord = is_object($this->_predictor) && method_exists($this->_predictor, 'predictNextWord');
+        $canPredictBeginning = is_object($this->_predictor) && method_exists($this->_predictor, 'predictBeginning');
+
+        $status = 'available';
+        if ($this->_predictor === null) {
+            $status = 'disabled';
+        } elseif (!$canPredictNextWords && !$canPredictNextWord && !$canPredictBeginning) {
+            $status = 'unavailable';
+        }
+
+        return [
+            'status' => $status,
+            'predictor' => is_object($this->_predictor) ? get_class($this->_predictor) : null,
+            'can_predict_next_words' => $canPredictNextWords,
+            'can_predict_next_word' => $canPredictNextWord,
+            'can_predict_beginning' => $canPredictBeginning,
+            'fallback_used' => false,
+            'fallback_reason' => null,
+            'error' => null,
+        ];
+    }
+
+    protected function recordResponsePredictorDiagnostics(): array
+    {
+        $diagnostics = $this->responsePredictorDiagnostics();
+        $this->_context->set('response_predictor', $diagnostics);
+
+        if (($diagnostics['fallback_used'] ?? false) || ($diagnostics['status'] ?? 'available') !== 'available') {
+            Dev::do('synthetiq.response.predictor.fallback', $diagnostics);
+        }
+
+        return $diagnostics;
     }
 
     public function evaluateNode(array $node): int

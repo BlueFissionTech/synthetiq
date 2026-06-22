@@ -134,6 +134,85 @@ class SynthetIQTest extends TestCase
         $this->assertContains('update', $words);
     }
 
+    public function testResponsePredictorDiagnosticsReportsAvailable(): void
+    {
+        $analyzer = new FakeAnalyzer([]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+
+        $diagnostics = $ai->responsePredictorDiagnostics();
+
+        $this->assertSame('available', $diagnostics['status']);
+        $this->assertTrue($diagnostics['can_predict_next_words']);
+        $this->assertTrue($diagnostics['can_predict_next_word']);
+    }
+
+    public function testResponsePredictorDiagnosticsReportsDisabledFallback(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'hello' => ['greeting.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setResponsePredictor(null);
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello there', 'reply.intent', []);
+
+        $response = $ai->processInput('hello');
+        $diagnostics = $ai->responsePredictorDiagnostics();
+
+        $this->assertSame('Hello there', $response);
+        $this->assertSame('disabled', $diagnostics['status']);
+        $this->assertTrue($diagnostics['fallback_used']);
+        $this->assertSame('predictor_disabled', $diagnostics['fallback_reason']);
+    }
+
+    public function testResponsePredictorDiagnosticsReportsUnavailablePredictor(): void
+    {
+        $analyzer = new FakeAnalyzer([]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setResponsePredictor(new \stdClass());
+
+        $diagnostics = $ai->responsePredictorDiagnostics();
+
+        $this->assertSame('unavailable', $diagnostics['status']);
+        $this->assertFalse($diagnostics['can_predict_next_words']);
+        $this->assertFalse($diagnostics['can_predict_next_word']);
+    }
+
+    public function testResponsePredictorDiagnosticsReportsFailedFallback(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'hello' => ['greeting.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setResponsePredictor(new class {
+            public function addSentence($sentence): void
+            {
+            }
+
+            public function predictNextWords($input): array
+            {
+                throw new \RuntimeException('predictor offline');
+            }
+        });
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello there', 'reply.intent', []);
+
+        $response = $ai->processInput('hello');
+        $diagnostics = $ai->responsePredictorDiagnostics();
+
+        $this->assertSame('Hello there', $response);
+        $this->assertSame('failed', $diagnostics['status']);
+        $this->assertTrue($diagnostics['fallback_used']);
+        $this->assertSame('predictor_failed', $diagnostics['fallback_reason']);
+        $this->assertSame(\RuntimeException::class, $diagnostics['error']['type']);
+    }
+
     private function readProperty(object $object, string $property): mixed
     {
         $reflection = new ReflectionProperty($object, $property);

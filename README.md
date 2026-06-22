@@ -128,6 +128,21 @@ $scores = $router->score('hello there', $context);
 $diagnostics = $router->lastDiagnostics();
 ```
 
+## Response Predictor Diagnostics
+
+Response selection uses a bounded trigram predictor when available. The public
+diagnostic contract reports whether that predictor is available, disabled,
+unavailable, or failed, and whether response selection had to fall back to a
+candidate response:
+
+```php
+$diagnostics = $ai->responsePredictorDiagnostics();
+```
+
+Use `setResponsePredictor(null)` to disable predictor-assisted selection while
+keeping template selection compatible. Custom predictors can expose
+`predictNextWords`, `predictNextWord`, or `predictBeginning`.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

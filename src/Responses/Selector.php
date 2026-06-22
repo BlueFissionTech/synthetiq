@@ -9,6 +9,7 @@ use BlueFission\Automata\DecisionTree\DepthFirstMethod;
 use BlueFission\Automata\DecisionTree\Node;
 use BlueFission\Collections\Collection;
 use BlueFission\Str;
+use Throwable;
 
 class Selector
 {
@@ -22,6 +23,7 @@ class Selector
     protected $_evalutation;
     protected $_useSingleTokenKey = 0;
     protected $_maxSingleTokenKeyPatterns = 2;
+    protected array $_lastDiagnostics = [];
 
     public function __construct($predictor, $evalutation)
     {
@@ -37,10 +39,13 @@ class Selector
         $this->_context = $context;
 
         if (empty($responses)) {
+            $this->resetDiagnostics($input, 0);
+            $this->markFallback('no_candidates');
             return '';
         }
 
         $responses = Arr::keys($responses);
+        $this->resetDiagnostics($input, count($responses));
         $this->_depth = 0;
         $this->_useSingleTokenKey = $this->_maxSingleTokenKeyPatterns;
 
@@ -53,7 +58,14 @@ class Selector
             return $selectedNode['response'];
         }
 
+        $this->markFallback('selection_miss');
+
         return (new Collection($responses))->rand();
+    }
+
+    public function lastDiagnostics(): array
+    {
+        return $this->_lastDiagnostics;
     }
 
     protected function buildDecisionTree($input, $samples): void
@@ -78,8 +90,9 @@ class Selector
             ->toArray();
 
         if (empty($firstWords)) {
-            if (method_exists($this->_predictor, 'predictBeginning')) {
-                $firstWords[] = $this->_predictor->predictBeginning();
+            $beginning = $this->predictBeginning();
+            if ($beginning !== null) {
+                $firstWords[] = $beginning;
             }
         }
 
@@ -107,31 +120,13 @@ class Selector
     // recursive function
     protected function buildDecisionTreeRecursive(&$node, $input): void
     {
-        $tokens = [];
-        if (method_exists($this->_predictor, 'predictNextWords')) {
-            $tokens = $this->_predictor->predictNextWords($input);
-        } elseif (method_exists($this->_predictor, 'predictNextWord')) {
-            for ($i = 0; $i < $this->_maxChildren; $i++) {
-                $next = $this->_predictor->predictNextWord($input);
-                if ($next) {
-                    $tokens[] = $next;
-                }
-            }
-            $tokens = array_values(Arr::unique($tokens));
-        }
+        $tokens = $this->predictTokens((string)$input);
 
         if (empty($tokens) && $this->_depth < 8 && $this->_useSingleTokenKey > 0) {
             $this->_useSingleTokenKey--;
             $lastWord = (new Collection(Str::split($input, ' ')))->last();
             $lastWord = (string)($lastWord ?: '');
-            if (method_exists($this->_predictor, 'predictNextWords')) {
-                $tokens = $this->_predictor->predictNextWords($lastWord);
-            } elseif (method_exists($this->_predictor, 'predictNextWord')) {
-                $next = $this->_predictor->predictNextWord($lastWord);
-                if ($next) {
-                    $tokens = [$next];
-                }
-            }
+            $tokens = $this->predictTokens($lastWord);
         }
 
         // var_dump($input, $tokens);
@@ -162,5 +157,118 @@ class Selector
 
         $node = new Node(['response' => $statement], $evaluation);
         $this->_decisionTree->getRoot()->addChild($node);
+    }
+
+    protected function resetDiagnostics(string $input, int $candidateCount): void
+    {
+        $status = $this->detectPredictorStatus();
+        $this->_lastDiagnostics = [
+            'status' => $status,
+            'fallback_used' => false,
+            'fallback_reason' => null,
+            'candidate_count' => $candidateCount,
+            'tokens_considered' => 0,
+            'input_length' => Str::len($input),
+            'error' => null,
+        ];
+
+        if ($status === 'disabled' || $status === 'unavailable') {
+            $this->markFallback('predictor_' . $status);
+        }
+    }
+
+    protected function detectPredictorStatus(): string
+    {
+        if ($this->_predictor === null) {
+            return 'disabled';
+        }
+
+        if (!is_object($this->_predictor)) {
+            return 'unavailable';
+        }
+
+        if (
+            !method_exists($this->_predictor, 'predictNextWords')
+            && !method_exists($this->_predictor, 'predictNextWord')
+            && !method_exists($this->_predictor, 'predictBeginning')
+        ) {
+            return 'unavailable';
+        }
+
+        return 'available';
+    }
+
+    protected function predictBeginning(): ?string
+    {
+        if (!is_object($this->_predictor) || !method_exists($this->_predictor, 'predictBeginning')) {
+            return null;
+        }
+
+        try {
+            $beginning = $this->_predictor->predictBeginning();
+        } catch (Throwable $e) {
+            $this->markPredictorFailure($e);
+            return null;
+        }
+
+        return is_string($beginning) && $beginning !== '' ? $beginning : null;
+    }
+
+    protected function predictTokens(string $input): array
+    {
+        if (!is_object($this->_predictor)) {
+            return [];
+        }
+
+        try {
+            if (method_exists($this->_predictor, 'predictNextWords')) {
+                $tokens = $this->_predictor->predictNextWords($input);
+            } elseif (method_exists($this->_predictor, 'predictNextWord')) {
+                $tokens = [];
+                for ($i = 0; $i < $this->_maxChildren; $i++) {
+                    $next = $this->_predictor->predictNextWord($input);
+                    if ($next) {
+                        $tokens[] = $next;
+                    }
+                }
+            } else {
+                return [];
+            }
+        } catch (Throwable $e) {
+            $this->markPredictorFailure($e);
+            return [];
+        }
+
+        if (!is_array($tokens)) {
+            return [];
+        }
+
+        $tokens = array_values(Arr::unique(array_filter($tokens, static function ($token): bool {
+            return is_string($token) && $token !== '';
+        })));
+
+        $this->_lastDiagnostics['tokens_considered'] += count($tokens);
+
+        return $tokens;
+    }
+
+    protected function markPredictorFailure(Throwable $e): void
+    {
+        $this->_lastDiagnostics['status'] = 'failed';
+        $this->_lastDiagnostics['error'] = [
+            'type' => get_class($e),
+            'message' => $e->getMessage(),
+        ];
+        $this->markFallback('predictor_failed');
+    }
+
+    protected function markFallback(string $reason): void
+    {
+        $this->_lastDiagnostics['fallback_used'] = true;
+        if (($this->_lastDiagnostics['fallback_reason'] ?? null) === 'predictor_failed') {
+            return;
+        }
+
+        $this->_lastDiagnostics['fallback_reason'] = $reason;
     }
 }

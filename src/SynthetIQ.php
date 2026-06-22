@@ -191,6 +191,7 @@ class SynthetIQ
             $responseTypes = [$responseTypes];
         }
         $responses = [];
+        $responseIntentMap = [];
 
         foreach ($responseTypes as $responseType) {
             $responseIntent = $this->_matcher->getIntent($responseType);
@@ -204,6 +205,7 @@ class SynthetIQ
             }
 
             $responses[$value] = $value;
+            $responseIntentMap[$value] = (string)$responseType;
             // var_dump($responseType, $intent, $value);
         }
 
@@ -214,6 +216,7 @@ class SynthetIQ
                 $value = $this->_responseGenerator->generate($input, $responseIntent, $this->_context);
                 if ($value !== '') {
                     $responses[$value] = $value;
+                    $responseIntentMap[$value] = 'unknown.intent';
                 }
             }
         }
@@ -225,6 +228,7 @@ class SynthetIQ
         if (Val::isNotEmpty($responses)) {
             // Use selector scoring to choose a consistent response.
             $response = $this->_responseSelector->select($input, $responses, $this->_context);
+            $this->recordSelectedResponseIntent($response, $responseIntentMap, $memoryRecall);
             $this->recordResponsePredictorDiagnostics();
         }
         $this->_input = '';
@@ -556,15 +560,34 @@ class SynthetIQ
         return $diagnostics;
     }
 
+    protected function recordSelectedResponseIntent(string $response, array $responseIntentMap, ?MemoryRecall $memoryRecall): void
+    {
+        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
+            return;
+        }
+
+        if (!Arr::hasKey($responseIntentMap, $response)) {
+            return;
+        }
+
+        $label = (string)$responseIntentMap[$response];
+        if (Val::isEmpty($label)) {
+            return;
+        }
+
+        $this->_context->set('selected_intent_label', $label);
+        $this->_context->set('selected_intent_scores', [$label => 1.0]);
+    }
+
     protected function buildResponseEnvelope(string $input, string $response): array
     {
         $intent = $this->_context->get('current_intent');
         $intentLabel = $this->_context->get('selected_intent_label');
         $scores = $this->arrayContextValue('selected_intent_scores');
-        if (empty($scores)) {
+        if (Val::isEmpty($scores)) {
             $scores = $this->arrayContextValue('intent_scores');
         }
-        $scoredLabel = array_key_first($scores);
+        $scoredLabel = Arr::keys($scores)[0] ?? null;
         $corrected = $this->_context->get('input_corrected');
         $original = $this->_context->get('input_original');
         $memoryRecall = $this->_context->get('memory_recall');
@@ -574,10 +597,10 @@ class SynthetIQ
             'response' => $response,
             'input' => [
                 'raw' => $input,
-                'normalized' => is_string($corrected) && $corrected !== '' ? $corrected : $input,
+                'normalized' => Str::is($corrected) && Val::isNotEmpty($corrected) ? $corrected : $input,
             ],
             'intent' => [
-                'label' => is_string($scoredLabel) ? $scoredLabel : (is_string($intentLabel) ? $intentLabel : ($intent instanceof Intent ? $intent->getLabel() : null)),
+                'label' => Str::is($scoredLabel) ? $scoredLabel : (Str::is($intentLabel) ? $intentLabel : ($intent instanceof Intent ? $intent->getLabel() : null)),
                 'confidence' => (float)($this->_context->get('intent_confidence') ?? 0.0),
                 'scores' => $scores,
             ],
@@ -585,13 +608,13 @@ class SynthetIQ
                 'used' => (bool)$this->_context->get('fallback_used'),
                 'reason' => $this->_context->get('fallback_reason'),
             ],
-            'memory' => is_array($memoryRecall) ? $memoryRecall : [],
+            'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
             'correction' => [
-                'applied' => is_string($original) && is_string($corrected) && $original !== $corrected,
+                'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,
                 'corrected' => $corrected,
             ],
-            'predictor' => is_array($predictor) ? $predictor : $this->responsePredictorDiagnostics(),
+            'predictor' => Arr::is($predictor) ? $predictor : $this->responsePredictorDiagnostics(),
         ];
     }
 
@@ -599,7 +622,7 @@ class SynthetIQ
     {
         $value = $this->_context->get($key);
 
-        return is_array($value) ? $value : [];
+        return Arr::is($value) ? $value : [];
     }
 
     public function evaluateNode(array $node): int

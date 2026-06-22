@@ -136,6 +136,9 @@ class SynthetIQ
 
     public function processInput(string $input): string
     {
+        $rawInput = $input;
+        $this->resetTurnDiagnostics($rawInput);
+
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
         // Run the input through the interpreter, it will produce an output
@@ -151,7 +154,9 @@ class SynthetIQ
         $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
         $confidence = $this->computeConfidence($scores);
 
-        $this->_context->set('intent_scores', $scores ? $scores->toArray() : []);
+        $turnScores = $scores ? $scores->toArray() : [];
+        $this->_context->set('intent_scores', $turnScores);
+        $this->_context->set('selected_intent_scores', $turnScores);
         $this->_context->set('intent_confidence', $confidence);
         Dev::do('synthetiq.intent.scored', [
             'input' => $input,
@@ -164,6 +169,7 @@ class SynthetIQ
             $intent = $this->_context->get('last_intent') ?? new Intent('unknown.intent', 'Unknown');
         }
         $this->_context->set('current_intent', $intent);
+        $this->_context->set('selected_intent_label', $intent->getLabel());
 
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, false);
         if ($fallbackResponse !== null) {
@@ -240,6 +246,13 @@ class SynthetIQ
         $this->recordMemory($input, $response);
 
         return $response;
+    }
+
+    public function processInputEnvelope(string $input): array
+    {
+        $response = $this->processInput($input);
+
+        return $this->buildResponseEnvelope($input, $response);
     }
 
     public function addRoute($statement, $type, $to = []) {
@@ -375,6 +388,19 @@ class SynthetIQ
         }
 
         return $normalized;
+    }
+
+    protected function resetTurnDiagnostics(string $input): void
+    {
+        $this->_context->set('input_raw', $input);
+        $this->_context->set('input_original', null);
+        $this->_context->set('input_corrected', null);
+        $this->_context->set('fallback_used', false);
+        $this->_context->set('fallback_reason', null);
+        $this->_context->set('memory_recall', []);
+        $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
+        $this->_context->set('selected_intent_label', null);
+        $this->_context->set('selected_intent_scores', []);
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -528,6 +554,52 @@ class SynthetIQ
         }
 
         return $diagnostics;
+    }
+
+    protected function buildResponseEnvelope(string $input, string $response): array
+    {
+        $intent = $this->_context->get('current_intent');
+        $intentLabel = $this->_context->get('selected_intent_label');
+        $scores = $this->arrayContextValue('selected_intent_scores');
+        if (empty($scores)) {
+            $scores = $this->arrayContextValue('intent_scores');
+        }
+        $scoredLabel = array_key_first($scores);
+        $corrected = $this->_context->get('input_corrected');
+        $original = $this->_context->get('input_original');
+        $memoryRecall = $this->_context->get('memory_recall');
+        $predictor = $this->_context->get('response_predictor');
+
+        return [
+            'response' => $response,
+            'input' => [
+                'raw' => $input,
+                'normalized' => is_string($corrected) && $corrected !== '' ? $corrected : $input,
+            ],
+            'intent' => [
+                'label' => is_string($scoredLabel) ? $scoredLabel : (is_string($intentLabel) ? $intentLabel : ($intent instanceof Intent ? $intent->getLabel() : null)),
+                'confidence' => (float)($this->_context->get('intent_confidence') ?? 0.0),
+                'scores' => $scores,
+            ],
+            'fallback' => [
+                'used' => (bool)$this->_context->get('fallback_used'),
+                'reason' => $this->_context->get('fallback_reason'),
+            ],
+            'memory' => is_array($memoryRecall) ? $memoryRecall : [],
+            'correction' => [
+                'applied' => is_string($original) && is_string($corrected) && $original !== $corrected,
+                'original' => $original,
+                'corrected' => $corrected,
+            ],
+            'predictor' => is_array($predictor) ? $predictor : $this->responsePredictorDiagnostics(),
+        ];
+    }
+
+    protected function arrayContextValue(string $key): array
+    {
+        $value = $this->_context->get($key);
+
+        return is_array($value) ? $value : [];
     }
 
     public function evaluateNode(array $node): int

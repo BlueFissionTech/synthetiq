@@ -18,7 +18,6 @@ use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Language\ContractionNormalizer;
 use BlueFission\Arr;
-use BlueFission\Data\FileSystem;
 use BlueFission\Func;
 use BlueFission\Num;
 use BlueFission\Val;
@@ -123,13 +122,8 @@ $defaults = [
 $options = parseOptions($_SERVER['argv'] ?? $argv ?? [], $defaults);
 
 $modelDir = $options['model-dir'] ?? $defaults['model-dir'];
-$files = new FileSystem();
-$modelParent = dirname($modelDir);
-if (!$files->exists($modelParent)) {
-    $files->mkdir($modelParent);
-}
-if (!$files->exists($modelDir)) {
-    $files->mkdir($modelDir);
+if (!is_dir($modelDir)) {
+    mkdir($modelDir, 0777, true);
 }
 
 $interpreter = new Interpreter(

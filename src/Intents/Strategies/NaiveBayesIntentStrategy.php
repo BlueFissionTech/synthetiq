@@ -6,7 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Strategy\Strategy;
 use BlueFission\Arr;
-use BlueFission\Data\FileSystem;
+use BlueFission\Data\File;
 use BlueFission\Net\HTTP;
 use BlueFission\Num;
 use BlueFission\Str;
@@ -230,7 +230,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
     protected function tryLoadCachedModel(): bool
     {
         $modelPath = $this->resolveModelPath();
-        if (Val::isEmpty($modelPath) || !FileSystem::fileExists($modelPath)) {
+        if (Val::isEmpty($modelPath) || !$this->fileExists($modelPath)) {
             return false;
         }
 
@@ -311,7 +311,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         $metaPath = $this->cacheMetaPath();
-        if (Val::isEmpty($metaPath) || !FileSystem::fileExists($metaPath)) {
+        if (Val::isEmpty($metaPath) || !$this->fileExists($metaPath)) {
             $this->_cacheMeta = [];
             return $this->_cacheMeta;
         }
@@ -345,6 +345,11 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         mkdir($directory, 0777, true);
+    }
+
+    protected function fileExists(?string $path): bool
+    {
+        return (new File())->exists($path);
     }
 
     protected function normalizeTestSize(float $testSize): float

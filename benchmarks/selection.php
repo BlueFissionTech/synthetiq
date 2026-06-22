@@ -4,6 +4,8 @@ use BlueFission\Arr;
 use BlueFission\Automata\Analysis\IAnalyzer;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Language\IInterpreter;
+use BlueFission\Num;
+use BlueFission\Str;
 use BlueFission\SynthetIQ\SynthetIQ;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -14,12 +16,12 @@ class BenchmarkAnalyzer implements IAnalyzer
 
     public function __construct(array $labels)
     {
-        $this->_labels = array_values($labels);
+        $this->_labels = Arr::values($labels);
     }
 
     public function analyze(string $input, Context $context, array $keywords): Arr
     {
-        $index = crc32($input) % max(1, count($this->_labels));
+        $index = crc32($input) % Num::max(1, Arr::count($this->_labels));
         return new Arr([$this->_labels[$index] => 1]);
     }
 }
@@ -48,7 +50,7 @@ class BenchmarkInterpreter implements IInterpreter
 
     public function tokenize(string $code): array
     {
-        return preg_split('/\s+/', trim($code)) ?: [];
+        return preg_split('/\s+/', Str::trim($code)) ?: [];
     }
 
     public function parse(array $tokens): array

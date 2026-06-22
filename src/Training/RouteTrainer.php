@@ -5,7 +5,15 @@ declare(strict_types=1);
 namespace BlueFission\SynthetIQ\Training;
 
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\Arr;
+use BlueFission\Collections\Collection;
+use BlueFission\Data\FileSystem;
+use BlueFission\Func;
+use BlueFission\Net\HTTP;
+use BlueFission\Num;
+use BlueFission\Security\Hash;
 use BlueFission\Str;
+use BlueFission\Val;
 use RuntimeException;
 
 class RouteTrainer
@@ -35,7 +43,7 @@ class RouteTrainer
     {
         self::assertValidState($state);
 
-        $intents = is_array($state['intents'] ?? null) ? $state['intents'] : [];
+        $intents = Arr::is($state['intents'] ?? null) ? $state['intents'] : [];
         $total = self::countStateStatements($state);
         $current = 0;
         $intentCount = 0;
@@ -45,12 +53,12 @@ class RouteTrainer
             $category = (string)$category;
             $intentCount++;
 
-            $keywords = is_array($info['keywords'] ?? null) ? $info['keywords'] : [];
-            $priorityBase = isset($info['priority']) && is_numeric($info['priority']) ? (int)$info['priority'] : null;
+            $keywords = Arr::is($info['keywords'] ?? null) ? $info['keywords'] : [];
+            $priorityBase = Val::is($info['priority'] ?? null) && Num::is($info['priority']) ? (int)$info['priority'] : null;
 
-            if (!empty($keywords)) {
+            if (Val::isNotEmpty($keywords)) {
                 $ai->addIntentKeywords($category, $keywords, $priorityBase);
-                $keywordCount += count($keywords);
+                $keywordCount += Arr::count($keywords);
             }
 
             self::emit($progress, [
@@ -58,14 +66,14 @@ class RouteTrainer
                 'intent' => $category,
                 'current' => $current,
                 'total' => $total,
-                'keywords' => count($keywords),
+                'keywords' => Arr::count($keywords),
             ]);
 
-            $targets = is_array($info['targets'] ?? null) ? $info['targets'] : [];
-            $statements = is_array($info['statements'] ?? null) ? $info['statements'] : [];
+            $targets = Arr::is($info['targets'] ?? null) ? $info['targets'] : [];
+            $statements = Arr::is($info['statements'] ?? null) ? $info['statements'] : [];
             foreach ($statements as $statement) {
                 $statement = (string)$statement;
-                if (Str::trim($statement) === '') {
+                if (Val::isEmpty(Str::trim($statement))) {
                     continue;
                 }
 
@@ -109,12 +117,12 @@ class RouteTrainer
 
         foreach ($dialogue as $category => $info) {
             $category = (string)$category;
-            $info = is_array($info) ? $info : [];
-            $boost = is_array($intentBoosts[$category] ?? null) ? $intentBoosts[$category] : [];
+            $info = Arr::is($info) ? $info : [];
+            $boost = Arr::is($intentBoosts[$category] ?? null) ? $intentBoosts[$category] : [];
 
-            $statements = self::normalizeStringList(is_array($info[1] ?? null) ? $info[1] : []);
+            $statements = self::normalizeStringList(Arr::is($info[1] ?? null) ? $info[1] : []);
             $keywords = self::keywordsForIntent($info, $boost);
-            $priorityBase = isset($boost['priority']) && is_numeric($boost['priority']) ? (int)$boost['priority'] : null;
+            $priorityBase = Val::is($boost['priority'] ?? null) && Num::is($boost['priority']) ? (int)$boost['priority'] : null;
 
             $intents[$category] = [
                 'targets' => self::normalizeTargets($info[0] ?? []),
@@ -123,8 +131,8 @@ class RouteTrainer
                 'priority' => $priorityBase,
             ];
 
-            $routeCount += count($statements);
-            $keywordCount += count($keywords);
+            $routeCount += Arr::count($statements);
+            $keywordCount += Arr::count($keywords);
         }
 
         $cacheKey = self::cacheKey($dialogue, $intentBoosts, $extra);
@@ -133,7 +141,7 @@ class RouteTrainer
             'version' => self::STATE_VERSION,
             'cache_key' => $cacheKey,
             'meta' => [
-                'intents' => count($intents),
+                'intents' => Arr::count($intents),
                 'routes' => $routeCount,
                 'keywords' => $keywordCount,
                 'extra' => self::normalize($extra),
@@ -150,12 +158,12 @@ class RouteTrainer
         self::assertValidState($state);
 
         $directory = dirname($path);
-        if ($directory !== '' && !is_dir($directory)) {
+        if (Val::isNotEmpty($directory) && !is_dir($directory)) {
             mkdir($directory, 0777, true);
         }
 
-        $payload = json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        if (!is_string($payload)) {
+        $payload = HTTP::jsonEncode($state);
+        if (!Str::is($payload)) {
             throw new RuntimeException('Unable to encode route training state.');
         }
 
@@ -167,13 +175,13 @@ class RouteTrainer
      */
     public static function loadState(string $path): array
     {
-        if (!is_file($path)) {
+        if (!FileSystem::fileExists($path)) {
             throw new RuntimeException("Route training state not found: {$path}");
         }
 
         $contents = file_get_contents($path);
-        $state = json_decode((string)$contents, true);
-        if (!is_array($state)) {
+        $state = HTTP::jsonDecode((string)$contents, true, []);
+        if (!Arr::is($state)) {
             throw new RuntimeException("Route training state is not valid JSON: {$path}");
         }
 
@@ -189,11 +197,15 @@ class RouteTrainer
      */
     public static function stateMatches(array $state, array $dialogue, array $intentBoosts = [], array $extra = []): bool
     {
-        if (!isset($state['cache_key']) || !is_string($state['cache_key']) || $state['cache_key'] === '') {
+        if (!self::hasCacheKey($state)) {
             return false;
         }
 
-        return hash_equals($state['cache_key'], self::cacheKey($dialogue, $intentBoosts, $extra));
+        return (new Hash('sha1'))->verify(
+            self::cachePayload($dialogue, $intentBoosts, $extra),
+            (string)$state['cache_key'],
+            'sha1'
+        );
     }
 
     /**
@@ -210,11 +222,7 @@ class RouteTrainer
      */
     public static function cacheKey(array $dialogue, array $intentBoosts = [], array $extra = []): string
     {
-        return sha1(json_encode(self::normalize([
-            'dialogue' => $dialogue,
-            'intent_boosts' => $intentBoosts,
-            'extra' => $extra,
-        ])) ?: '');
+        return Hash::value(self::cachePayload($dialogue, $intentBoosts, $extra), 'sha1');
     }
 
     /**
@@ -224,14 +232,14 @@ class RouteTrainer
      */
     protected static function keywordsForIntent(array $info, array $boost): array
     {
-        $keywords = is_array($info[2] ?? null) ? $info[2] : [];
-        if (is_array($boost['keywords'] ?? null)) {
-            $keywords = array_merge($keywords, $boost['keywords']);
+        $keywords = Arr::is($info[2] ?? null) ? $info[2] : [];
+        if (Arr::is($boost['keywords'] ?? null)) {
+            $keywords = Arr::merge($keywords, $boost['keywords']);
         }
 
-        $exclude = is_array($boost['exclude'] ?? null) ? $boost['exclude'] : [];
+        $exclude = Arr::is($boost['exclude'] ?? null) ? $boost['exclude'] : [];
 
-        return self::normalizeKeywords($keywords, array_merge(self::DEFAULT_STOPWORDS, $exclude));
+        return self::normalizeKeywords($keywords, Arr::merge(self::DEFAULT_STOPWORDS, $exclude));
     }
 
     /**
@@ -249,14 +257,14 @@ class RouteTrainer
         $normalized = [];
         foreach ($keywords as $keyword) {
             $keyword = Str::lower(Str::trim((string)$keyword));
-            if ($keyword === '' || isset($excludeSet[$keyword])) {
+            if (Val::isEmpty($keyword) || Arr::hasKey($excludeSet, $keyword)) {
                 continue;
             }
 
             $normalized[$keyword] = true;
         }
 
-        return array_keys($normalized);
+        return Arr::keys($normalized);
     }
 
     /**
@@ -268,13 +276,35 @@ class RouteTrainer
             throw new RuntimeException('Unsupported route training state version.');
         }
 
-        if (!isset($state['cache_key']) || !is_string($state['cache_key']) || $state['cache_key'] === '') {
+        if (!self::hasCacheKey($state)) {
             throw new RuntimeException('Route training state is missing a cache key.');
         }
 
-        if (!is_array($state['intents'] ?? null)) {
+        if (!Arr::is($state['intents'] ?? null)) {
             throw new RuntimeException('Route training state is missing intents.');
         }
+    }
+
+    protected static function hasCacheKey(array $state): bool
+    {
+        return Arr::hasKey($state, 'cache_key')
+            && Str::is($state['cache_key'])
+            && Val::isNotEmpty($state['cache_key']);
+    }
+
+    /**
+     * @param array<string, array<int, mixed>> $dialogue
+     * @param array<string, array<string, mixed>> $intentBoosts
+     */
+    protected static function cachePayload(array $dialogue, array $intentBoosts = [], array $extra = []): string
+    {
+        $payload = HTTP::jsonEncode(self::normalize([
+            'dialogue' => $dialogue,
+            'intent_boosts' => $intentBoosts,
+            'extra' => $extra,
+        ]));
+
+        return Str::is($payload) ? $payload : '';
     }
 
     /**
@@ -283,10 +313,13 @@ class RouteTrainer
     protected static function countStateStatements(array $state): int
     {
         $total = 0;
-        $intents = is_array($state['intents'] ?? null) ? $state['intents'] : [];
+        $intents = Arr::is($state['intents'] ?? null) ? $state['intents'] : [];
         foreach ($intents as $info) {
-            if (is_array($info['statements'] ?? null)) {
-                $total += count(array_filter($info['statements'], static fn($statement): bool => Str::trim((string)$statement) !== ''));
+            if (Arr::is($info['statements'] ?? null)) {
+                $statements = (new Collection($info['statements']))->filter(
+                    static fn($statement): bool => Val::isNotEmpty(Str::trim((string)$statement))
+                );
+                $total += $statements->count();
             }
         }
 
@@ -302,7 +335,7 @@ class RouteTrainer
         $normalized = [];
         foreach ($values as $value) {
             $value = Str::trim((string)$value);
-            if ($value === '') {
+            if (Val::isEmpty($value)) {
                 continue;
             }
 
@@ -317,7 +350,7 @@ class RouteTrainer
      */
     protected static function normalizeTargets(mixed $targets): array
     {
-        if (!is_array($targets)) {
+        if (!Arr::is($targets)) {
             $targets = [$targets];
         }
 
@@ -326,7 +359,7 @@ class RouteTrainer
 
     protected static function emit(?callable $progress, array $event): void
     {
-        if (!$progress) {
+        if (!Func::isCallable($progress)) {
             return;
         }
 
@@ -335,7 +368,7 @@ class RouteTrainer
 
     protected static function normalize(mixed $value): mixed
     {
-        if (!is_array($value)) {
+        if (!Arr::is($value)) {
             return $value;
         }
 

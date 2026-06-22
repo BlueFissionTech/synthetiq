@@ -5,7 +5,9 @@ namespace BlueFission\SynthetIQ\Intents\Strategies;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Strategy\Strategy;
 use BlueFission\Arr;
+use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\Collections\Collection;
 use BlueFission\DevElation as Dev;
 
@@ -29,7 +31,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
 
         Dev::do('synthetiq.intent.strategy.overlap.trained', [
             'accuracy' => $this->_accuracy,
-            'labels' => array_keys($this->_keywordsByLabel),
+            'labels' => Arr::keys($this->_keywordsByLabel),
         ]);
     }
 
@@ -41,10 +43,10 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
         $scores = [];
         foreach ($this->_keywordsByLabel as $label => $keywords) {
             $shared = Arr::intersect($tokens, $keywords);
-            $scores[$label] = count($shared);
+            $scores[$label] = Arr::count($shared);
         }
 
-        if (!empty($scores)) {
+        if (Val::isNotEmpty($scores)) {
             arsort($scores);
         }
 
@@ -65,7 +67,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
     protected function evaluateAccuracy(array $samples, array $labels, float $testSize): float
     {
         $pairs = $this->buildTestPairs($samples, $labels, $testSize);
-        if (empty($pairs)) {
+        if (Val::isEmpty($pairs)) {
             return 0.0;
         }
 
@@ -100,7 +102,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
             return $scores->keys()->get(0);
         }
 
-        if (is_array($scores) && !empty($scores)) {
+        if (Arr::is($scores) && Val::isNotEmpty($scores)) {
             $wrapped = Arr::make($scores);
             return $wrapped->keys()->get(0);
         }
@@ -111,7 +113,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
     protected function buildKeywordMap(array $samples, array $labels): array
     {
         $map = [];
-        $count = min(count($samples), count($labels));
+        $count = (int)Num::min(Arr::count($samples), Arr::count($labels));
 
         for ($i = 0; $i < $count; $i++) {
             $label = (string)$labels[$i];
@@ -122,7 +124,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
                 $map[$label] = [];
             }
 
-            $map[$label] = array_merge($map[$label], $tokens);
+            $map[$label] = Arr::merge($map[$label], $tokens);
         }
 
         foreach ($map as $label => $keywords) {
@@ -135,7 +137,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
     protected function tokenize(string $input): array
     {
         $input = Str::lower(Str::trim($input));
-        if ($input === '') {
+        if (Val::isEmpty($input)) {
             return [];
         }
 
@@ -151,12 +153,12 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
 
     protected function buildTestPairs(array $samples, array $labels, float $testSize): array
     {
-        $count = min(count($samples), count($labels));
+        $count = (int)Num::min(Arr::count($samples), Arr::count($labels));
         if ($count === 0) {
             return [];
         }
 
-        $testCount = (int)round($count * $testSize);
+        $testCount = (int)Num::round($count * $testSize);
         if ($testCount < 1) {
             $testCount = $count;
         } elseif ($testCount > $count) {
@@ -168,7 +170,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
         $labelSlice = Arr::slice($labels, $start);
 
         $pairs = [];
-        $sliceCount = min(count($sampleSlice), count($labelSlice));
+        $sliceCount = (int)Num::min(Arr::count($sampleSlice), Arr::count($labelSlice));
         for ($i = 0; $i < $sliceCount; $i++) {
             $pairs[] = [
                 'sample' => $sampleSlice[$i],

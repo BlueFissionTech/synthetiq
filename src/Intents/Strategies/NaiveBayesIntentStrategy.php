@@ -6,7 +6,10 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 use BlueFission\Automata\Strategy\Strategy;
 use BlueFission\Arr;
+use BlueFission\Net\HTTP;
+use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\DevElation as Dev;
 
 class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyInterface
@@ -33,30 +36,30 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
     {
         $this->_classifier = $classifier ?? new NaiveBayesTextClassification();
 
-        if (isset($options['min_samples'])) {
-            $this->_minSamples = max(1, (int)$options['min_samples']);
+        if (Val::is($options['min_samples'] ?? null)) {
+            $this->_minSamples = (int)Num::max(1, (int)$options['min_samples']);
         }
-        if (isset($options['min_labels'])) {
-            $this->_minLabels = max(1, (int)$options['min_labels']);
+        if (Val::is($options['min_labels'] ?? null)) {
+            $this->_minLabels = (int)Num::max(1, (int)$options['min_labels']);
         }
-        if (isset($options['confidence_floor'])) {
+        if (Val::is($options['confidence_floor'] ?? null)) {
             $this->_confidenceFloor = $this->clampScore((float)$options['confidence_floor']);
         }
-        if (isset($options['confidence_cap'])) {
+        if (Val::is($options['confidence_cap'] ?? null)) {
             $this->_confidenceCap = $this->clampScore((float)$options['confidence_cap']);
         }
-        if (isset($options['unknown_cap'])) {
+        if (Val::is($options['unknown_cap'] ?? null)) {
             $this->_unknownCap = $this->clampScore((float)$options['unknown_cap']);
         }
-        if (isset($options['small_sample_penalty'])) {
-            $this->_smallSamplePenalty = max(0.0, (float)$options['small_sample_penalty']);
+        if (Val::is($options['small_sample_penalty'] ?? null)) {
+            $this->_smallSamplePenalty = Num::max(0.0, (float)$options['small_sample_penalty']);
         }
 
         $this->_cacheEnabled = !((bool)($options['disable_cache'] ?? false));
         $this->_forceRetrain = (bool)($options['force_retrain'] ?? false);
         $this->_cacheKey = (string)($options['cache_key'] ?? '');
-        $this->_cacheDir = isset($options['cache_dir']) ? (string)$options['cache_dir'] : null;
-        $this->_modelPath = isset($options['model_path']) ? (string)$options['model_path'] : null;
+        $this->_cacheDir = Val::is($options['cache_dir'] ?? null) ? (string)$options['cache_dir'] : null;
+        $this->_modelPath = Val::is($options['model_path'] ?? null) ? (string)$options['model_path'] : null;
     }
 
     public function setContext(Context $context): void
@@ -70,10 +73,10 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         $labels = Dev::apply('synthetiq.intent.strategy.naive_bayes.train.labels', $labels);
 
         $dataset = $this->normalizeDataset($samples, $labels);
-        $sampleCount = count($dataset['samples']);
+        $sampleCount = Arr::count($dataset['samples']);
         $uniqueLabels = Arr::unique($dataset['labels']);
         $this->_sampleCount = $sampleCount;
-        $this->_labelCount = count($uniqueLabels);
+        $this->_labelCount = Arr::count($uniqueLabels);
 
         if ($sampleCount < $this->_minSamples || $this->_labelCount < $this->_minLabels) {
             $this->_accuracy = 0.0;
@@ -136,7 +139,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
             $scores['unknown.intent'] = $fallback;
         }
 
-        if (!empty($scores)) {
+        if (Val::isNotEmpty($scores)) {
             arsort($scores);
         }
 
@@ -161,7 +164,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
             'labels' => [],
         ];
 
-        $count = min(count($samples), count($labels));
+        $count = (int)Num::min(Arr::count($samples), Arr::count($labels));
         for ($i = 0; $i < $count; $i++) {
             $sample = Str::trim((string)$samples[$i]);
             $label = Str::trim((string)$labels[$i]);
@@ -200,7 +203,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
 
     protected function resolveModelPath(): ?string
     {
-        if ($this->_modelPath && $this->_modelPath !== '') {
+        if (Val::isNotEmpty($this->_modelPath)) {
             return $this->_modelPath;
         }
 
@@ -226,7 +229,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
     protected function tryLoadCachedModel(): bool
     {
         $modelPath = $this->resolveModelPath();
-        if (!$modelPath || !file_exists($modelPath)) {
+        if (Val::isEmpty($modelPath) || !file_exists($modelPath)) {
             return false;
         }
 
@@ -261,9 +264,7 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         $directory = dirname($modelPath);
-        if (!is_dir($directory)) {
-            mkdir($directory, 0777, true);
-        }
+        $this->ensureDirectory($directory);
 
         $saved = $this->_classifier->saveModel($modelPath);
         if ($saved) {
@@ -309,14 +310,14 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         $metaPath = $this->cacheMetaPath();
-        if (!$metaPath || !file_exists($metaPath)) {
+        if (Val::isEmpty($metaPath) || !file_exists($metaPath)) {
             $this->_cacheMeta = [];
             return $this->_cacheMeta;
         }
 
         $contents = file_get_contents($metaPath);
-        $data = json_decode((string)$contents, true);
-        if (!is_array($data)) {
+        $data = HTTP::jsonDecode((string)$contents, true, []);
+        if (!Arr::is($data)) {
             $data = [];
         }
 
@@ -332,8 +333,17 @@ class NaiveBayesIntentStrategy extends Strategy implements ContextAwareStrategyI
         }
 
         $this->_cacheMeta = $data;
-        $payload = json_encode($data, JSON_PRETTY_PRINT);
+        $payload = HTTP::jsonEncode($data);
         file_put_contents($metaPath, $payload === false ? '{}' : $payload);
+    }
+
+    protected function ensureDirectory(string $directory): void
+    {
+        if (is_dir($directory)) {
+            return;
+        }
+
+        mkdir($directory, 0777, true);
     }
 
     protected function normalizeTestSize(float $testSize): float

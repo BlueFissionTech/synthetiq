@@ -12,7 +12,9 @@ use BlueFission\SynthetIQ\Intents\Strategies\KeywordOverlapStrategy;
 use BlueFission\SynthetIQ\Intents\Strategies\MatcherIntentStrategy;
 use BlueFission\SynthetIQ\Intents\Strategies\NaiveBayesIntentStrategy;
 use BlueFission\Arr;
+use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\DevElation as Dev;
 
 class IntelligenceRouter extends Classifier
@@ -31,13 +33,13 @@ class IntelligenceRouter extends Classifier
     {
         parent::__construct($analyzer, $matcher);
 
-        $minThreshold = isset($options['min_threshold']) ? (float)$options['min_threshold'] : 0.0;
+        $minThreshold = Val::is($options['min_threshold'] ?? null) ? (float)$options['min_threshold'] : 0.0;
         $this->_intelligence = $options['intelligence'] ?? new Intelligence($minThreshold);
-        if (isset($options['test_size'])) {
+        if (Val::is($options['test_size'] ?? null)) {
             $this->_testSize = (float)$options['test_size'];
         }
-        $this->_strategyWeights = is_array($options['strategy_weights'] ?? null) ? $options['strategy_weights'] : [];
-        $this->_strategyThresholds = is_array($options['strategy_thresholds'] ?? null) ? $options['strategy_thresholds'] : [];
+        $this->_strategyWeights = Arr::is($options['strategy_weights'] ?? null) ? $options['strategy_weights'] : [];
+        $this->_strategyThresholds = Arr::is($options['strategy_thresholds'] ?? null) ? $options['strategy_thresholds'] : [];
 
         $this->registerDefaultStrategies($options);
 
@@ -136,7 +138,7 @@ class IntelligenceRouter extends Classifier
         }
 
         $extraStrategies = $options['strategies'] ?? [];
-        if (is_array($extraStrategies)) {
+        if (Arr::is($extraStrategies)) {
             foreach ($extraStrategies as $name => $strategy) {
                 if ($strategy instanceof IStrategy) {
                     $this->registerStrategy((string)$name, $strategy);
@@ -155,7 +157,7 @@ class IntelligenceRouter extends Classifier
         $samples = $training['samples'];
         $labels = $training['labels'];
 
-        if (empty($samples) || empty($labels)) {
+        if (Val::isEmpty($samples) || Val::isEmpty($labels)) {
             $this->_needsTraining = false;
             Dev::do('synthetiq.intent.router.train_skipped', ['reason' => 'no_samples']);
             return;
@@ -216,11 +218,11 @@ class IntelligenceRouter extends Classifier
             return $output;
         }
 
-        if (is_array($output)) {
+        if (Arr::is($output)) {
             return Arr::make($output);
         }
 
-        if (is_string($output) && $output !== '') {
+        if (Str::is($output) && Val::isNotEmpty($output)) {
             return Arr::make([$output => 1.0]);
         }
 
@@ -270,7 +272,7 @@ class IntelligenceRouter extends Classifier
             ];
         }
 
-        if (!empty($combined)) {
+        if (Val::isNotEmpty($combined)) {
             arsort($combined);
         }
 
@@ -280,13 +282,13 @@ class IntelligenceRouter extends Classifier
 
         Dev::do('synthetiq.intent.router.ensemble_scored', $diagnostics);
 
-        return empty($combined) ? null : Arr::make($combined);
+        return Val::isEmpty($combined) ? null : Arr::make($combined);
     }
 
     protected function strategyWeight(string $name, IStrategy $strategy): float
     {
-        if (isset($this->_strategyWeights[$name]) && is_numeric($this->_strategyWeights[$name])) {
-            return max(0.0, (float)$this->_strategyWeights[$name]);
+        if (Val::is($this->_strategyWeights[$name] ?? null) && Num::is($this->_strategyWeights[$name])) {
+            return Num::max(0.0, (float)$this->_strategyWeights[$name]);
         }
 
         $accuracy = $strategy->accuracy();

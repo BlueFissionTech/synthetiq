@@ -6,6 +6,8 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Matcher;
 use BlueFission\Automata\Strategy\Strategy;
 use BlueFission\Arr;
+use BlueFission\Num;
+use BlueFission\Val;
 use BlueFission\DevElation as Dev;
 
 class MatcherIntentStrategy extends Strategy implements ContextAwareStrategyInterface
@@ -65,7 +67,7 @@ class MatcherIntentStrategy extends Strategy implements ContextAwareStrategyInte
     protected function evaluateAccuracy(array $samples, array $labels, float $testSize): float
     {
         $pairs = $this->buildTestPairs($samples, $labels, $testSize);
-        if (empty($pairs)) {
+        if (Val::isEmpty($pairs)) {
             return 0.0;
         }
 
@@ -100,7 +102,7 @@ class MatcherIntentStrategy extends Strategy implements ContextAwareStrategyInte
             return $scores->keys()->get(0);
         }
 
-        if (is_array($scores) && !empty($scores)) {
+        if (Arr::is($scores) && Val::isNotEmpty($scores)) {
             $wrapped = Arr::make($scores);
             return $wrapped->keys()->get(0);
         }
@@ -110,12 +112,12 @@ class MatcherIntentStrategy extends Strategy implements ContextAwareStrategyInte
 
     protected function buildTestPairs(array $samples, array $labels, float $testSize): array
     {
-        $count = min(count($samples), count($labels));
+        $count = (int)Num::min(Arr::count($samples), Arr::count($labels));
         if ($count === 0) {
             return [];
         }
 
-        $testCount = (int)round($count * $testSize);
+        $testCount = (int)Num::round($count * $testSize);
         if ($testCount < 1) {
             $testCount = $count;
         } elseif ($testCount > $count) {
@@ -127,7 +129,7 @@ class MatcherIntentStrategy extends Strategy implements ContextAwareStrategyInte
         $labelSlice = Arr::slice($labels, $start);
 
         $pairs = [];
-        $sliceCount = min(count($sampleSlice), count($labelSlice));
+        $sliceCount = (int)Num::min(Arr::count($sampleSlice), Arr::count($labelSlice));
         for ($i = 0; $i < $sliceCount; $i++) {
             $pairs[] = [
                 'sample' => $sampleSlice[$i],

@@ -16,9 +16,9 @@ Status legend: Implemented, Partial, Not implemented.
 - Multi-stage intent routing with confidence thresholds. (Partial)
 - Context-aware intent biasing using `Context` history. (Partial)
 - Keyword/phrase weighting tuned per domain. (Partial)
-- Misspelling and near-match correction pipeline. (Not implemented)
+- Misspelling and near-match correction pipeline. (Partial)
 - Multi-turn conversation flow graphs. (Not implemented)
-- Data expansion and regression evaluation suite. (Not implemented)
+- Data expansion and regression evaluation suite. (Partial)
 
 ## Phase 2 - Memory and Persona
 
@@ -31,10 +31,10 @@ Status legend: Implemented, Partial, Not implemented.
 ## Phase 3 - Production Readiness
 
 - Offline model training + cached inference bundles. (Partial)
-- Multi-strategy benchmarking via Automata `BenchmarkService`. (Not implemented)
+- Multi-strategy benchmarking via Automata `BenchmarkService`. (Partial)
 - LLM fallback (quantized) for unknown intents. (Partial)
 - Safety and policy filters with audit logs. (Not implemented)
-- Load testing and latency/throughput budgets. (Not implemented)
+- Load testing and latency/throughput budgets. (Partial)
 
 ## Feature List
 
@@ -46,10 +46,14 @@ Status legend: Implemented, Partial, Not implemented.
 | Unknown intent bucket | Default responses | Implemented |
 | Intent keyword boosts | Curated keywords per intent | Implemented |
 | Scripted vibe templates | `{=...}` execution blocks | Not implemented |
-| Spelling tolerance | Fuzzy correction + phonetics | Not implemented |
+| Spelling tolerance | Vocabulary edit-distance correction; phonetics and synonyms pending | Partial |
 | Short-term memory | Holoscene + ABS memory | Partial |
 | Context routing | Intent weighting by history | Partial |
-| Strategy ensemble | Multi-strategy intent routing | Not implemented |
+| Strategy ensemble | Matcher, keyword overlap, and optional Naive Bayes scoring | Partial |
 | LLM fallback | Mini quantized LLM for unknown intent | Partial |
 | Safety filters | Policy gating and logging | Not implemented |
+| Route state lifecycle | Compile, save, validate, and apply cached route catalogs | Partial |
+| Predictor diagnostics | Response predictor status and fallback metadata | Implemented |
+| Response envelope | Structured response, intent, fallback, memory, correction, and predictor metadata | Implemented |
+| JenSS stress fixtures | Optional fixture smoke validation via Jenerator autoload | Implemented |
 

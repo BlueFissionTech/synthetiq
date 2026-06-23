@@ -38,25 +38,34 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 
 - `SynthetIQ`: Orchestrates the flow (interpret -> classify -> generate -> select -> record).
 - `Intents\Classifier`: Uses Automata matchers with a naive keyword fallback.
+- `Intents\IntelligenceRouter`: Blends matcher, keyword overlap, and optional Naive Bayes strategy scores.
+- `Language\SpellCorrector`: Provides optional vocabulary-driven edit-distance normalization.
 - `Responses\Generator`: Template-based response rendering.
 - `Responses\Selector`: Decision-tree selection with predictive scoring.
 - `ConversationHistory`: Stores past input/response pairs.
 - `Skills\*`: Optional Automata skills for specific behaviors.
+- `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
+- `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
 
-1. Input is interpreted by an Automata `IInterpreter`.
-2. Intent classification uses `Matcher` and keyword criteria.
-3. Templates are chosen for the intent label.
-4. Response candidates are scored using a decision tree and heuristics.
-5. The selected response is recorded in history and context.
+1. Input is optionally normalized by `SpellCorrector`.
+2. Input is interpreted by an Automata `IInterpreter`.
+3. Intent classification uses `IntelligenceRouter`, Automata matchers, keyword criteria, and configured strategies.
+4. Low-confidence or unknown intent paths can call a configured fallback responder.
+5. Templates are chosen for the intent label.
+6. Response candidates are scored using a decision tree and predictor diagnostics.
+7. The selected response is recorded in history and context.
+8. Callers can use `processInputEnvelope()` when structured diagnostics are required.
 
 ## Interfaces and Configuration
 
 - Routes are added via `SynthetIQ::addRoute($statement, $type, $to)`.
 - Templates are simple text strings with optional `{{input}}` substitutions.
 - Sample configuration is provided in `sample_configs/`.
+- Route catalogs can be compiled and applied through `RouteTrainer`.
+- Response predictor diagnostics and response envelopes are public contracts for observability.
 
 ## Quality Targets
 
@@ -76,3 +85,4 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Focus on intent classification, routing, and response selection.
 - Use deterministic predictors or seeded randomness for repeatable tests.
 - Mock Automata components where needed to keep tests fast and reliable.
+- Keep optional JenSS/Jenerator fixture validation opt-in through environment variables documented in `tests.md`.

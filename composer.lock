@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b4a6b99a94433943494ffbb6ccf463e9",
+    "content-hash": "10c954538acaf093bb8286ca12a1dbe4",
     "packages": [
         {
             "name": "bluefission/automata",
@@ -4303,9 +4303,9 @@
     },
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": [],
-    "platform-dev": {
-        "php": ">=8.0.0"
+    "platform": {
+        "php": ">=8.2"
     },
+    "platform-dev": [],
     "plugin-api-version": "2.6.0"
 }

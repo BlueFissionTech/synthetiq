@@ -83,9 +83,11 @@ class BoundedTrigramPredictor
 
     public function tokenize(string $sentence): array
     {
-        $tokens = Str::splitBy(Str::lower(Str::trim($sentence)), '/\s+/', -1, PREG_SPLIT_NO_EMPTY);
-
-        return Arr::is($tokens) ? $tokens : [];
+        return Str::make($sentence)
+            ->trim()
+            ->lower()
+            ->splitBy('/\s+/', -1, PREG_SPLIT_NO_EMPTY)
+            ->toArray();
     }
 
     protected function rememberBeginning(string $beginning): void

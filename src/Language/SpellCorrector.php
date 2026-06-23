@@ -159,7 +159,7 @@ class SpellCorrector
 
     protected function normalizeToken(string $token): string
     {
-        $token = Str::lower(Str::trim($token));
+        $token = Str::make($token)->trim()->lower()->val();
         if ($token === '') {
             return '';
         }

@@ -26,6 +26,7 @@ use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\DevElation as Dev;
+use Throwable;
 
 class SynthetIQ
 {
@@ -141,8 +142,15 @@ class SynthetIQ
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
-        // Run the input through the interpreter, it will produce an output
-        $this->_interpreter->run(Str::lower($input));
+        // Run the input through the interpreter when it accepts the phrase.
+        try {
+            $this->_interpreter->run(Str::lower($input));
+        } catch (Throwable $e) {
+            Dev::do('synthetiq.interpreter.run_failed', [
+                'input' => $input,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $memoryRecall = $this->recallMemory($input);
 
@@ -643,14 +651,24 @@ class SynthetIQ
             $score += 3;
         }
 
-        // Run in interpreter to see if it's valid
-        if ( $this->_interpreter->isValid($node['response']) ) {
+        // Run in interpreter to see if it's valid.
+        try {
+            $interpreterValid = $this->_interpreter->isValid($node['response']);
+        } catch (Throwable $e) {
+            $interpreterValid = false;
+        }
+
+        if ( $interpreterValid ) {
             // echo "-- Interpreter match\n";
             $score += 2;
 
             if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
-                $tokens = $this->_interpreter->tokenize($node['response']);
-                $output = $this->_interpreter->parse($tokens);
+                try {
+                    $tokens = $this->_interpreter->tokenize($node['response']);
+                    $output = $this->_interpreter->parse($tokens);
+                } catch (Throwable $e) {
+                    $output = [];
+                }
             }
 
             // var_dump($output);

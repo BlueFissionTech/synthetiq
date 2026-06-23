@@ -16,10 +16,10 @@ class Classifier implements IClassifier
     protected $_extractor;
     protected $_matcher;
 
-    public function __construct( IAnalyzer $analyzer )
+    public function __construct(IAnalyzer $analyzer, ?Matcher $matcher = null)
     {
         $this->_extractor = new EntityExtractor();
-        $this->_matcher = new Matcher($analyzer);
+        $this->_matcher = $matcher ?? new Matcher($analyzer);
     }
 
     public function score(string $input, Context $context): ?Arr

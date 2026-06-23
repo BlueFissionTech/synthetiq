@@ -18,6 +18,7 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 5. Conversation history and context update for follow-up turns.
 6. Optional memory and fallback hooks can bias intent selection or route to a
    low-confidence fallback.
+7. Optional spell correction can normalize near-miss tokens before routing.
 
 ## Install
 
@@ -76,7 +77,8 @@ These rely on the Composer package `bluefission/simpleclients`.
 ## Core Components
 
 - `BlueFission\SynthetIQ\SynthetIQ`: orchestrates interpretation, intent classification, response generation, and selection.
-- `BlueFission\SynthetIQ\Intents\Classifier`: matches input to known intents with fallback keyword checks.
+- `BlueFission\SynthetIQ\Intents\IntelligenceRouter`: combines matcher, keyword overlap, and optional Naive Bayes strategies.
+- `BlueFission\SynthetIQ\Intents\Classifier`: provides baseline intent matching and fallback keyword checks.
 - `BlueFission\SynthetIQ\Responses\Generator`: renders template-based responses.
 - `BlueFission\SynthetIQ\Responses\Selector`: selects responses using a decision tree and prediction heuristics.
 - `BlueFission\SynthetIQ\ConversationHistory`: stores input/response pairs.
@@ -94,11 +96,109 @@ Routes are built by registering statements for an intent label. Each statement b
 
 This keeps behavior simple, repeatable, and easy to customize.
 
+`RouteTrainer` centralizes route catalog registration, boost keyword handling,
+progress events, stable cache-key generation, and compiled route-state
+serialization:
+
+```php
+use BlueFission\SynthetIQ\Training\RouteTrainer;
+
+$state = RouteTrainer::compile($dialogue, $intentBoosts, [
+    'grammar' => $grammar,
+    'tokens' => $tokens,
+]);
+
+RouteTrainer::saveState($state, __DIR__ . '/models/routes.json');
+
+if (RouteTrainer::stateMatches($state, $dialogue, $intentBoosts, ['grammar' => $grammar, 'tokens' => $tokens])) {
+    RouteTrainer::apply($ai, $state);
+}
+```
+
+The route-state example can be used as a non-interactive rollout smoke command:
+
+```bash
+php examples/route_state.php --write --state=models/routes/synthetiq_routes.json
+php examples/route_state.php --state=models/routes/synthetiq_routes.json
+php examples/route_state.php --state=models/routes/synthetiq_routes.json --apply --probe=hello
+```
+
+## Intent Routing Strategies
+
+`SynthetIQ` uses `IntelligenceRouter` by default. The router trains lightweight
+strategies from registered route keywords, combines their scores, and exposes
+diagnostics for review:
+
+```php
+$ai = new SynthetIQ($interpreter, $analyzer, null, null, null, null, [
+    'strategy_weights' => [
+        'matcher' => 1.0,
+        'keyword_overlap' => 0.75,
+        'naive_bayes' => 0.5,
+    ],
+    'strategy_thresholds' => [
+        'matcher' => 0.2,
+        'keyword_overlap' => 0.1,
+    ],
+]);
+```
+
+For direct router use:
+
+```php
+use BlueFission\SynthetIQ\Intents\IntelligenceRouter;
+
+$router = new IntelligenceRouter($analyzer, null, [
+    'enable_naive_bayes' => false,
+]);
+
+$scores = $router->score('hello there', $context);
+$diagnostics = $router->lastDiagnostics();
+```
+
+## Response Predictor Diagnostics
+
+Response selection uses a bounded trigram predictor when available. The public
+diagnostic contract reports whether that predictor is available, disabled,
+unavailable, or failed, and whether response selection had to fall back to a
+candidate response:
+
+```php
+$diagnostics = $ai->responsePredictorDiagnostics();
+```
+
+Use `setResponsePredictor(null)` to disable predictor-assisted selection while
+keeping template selection compatible. Custom predictors can expose
+`predictNextWords`, `predictNextWord`, or `predictBeginning`.
+
+## Response Envelope
+
+`processInput(string)` still returns the selected response string. Use
+`processInputEnvelope(string)` when callers need structured diagnostics for a
+turn:
+
+```php
+$result = $ai->processInputEnvelope('hello');
+
+echo $result['response'];
+$intent = $result['intent']['label'];
+$predictor = $result['predictor']['status'];
+```
+
+The envelope includes the response text, raw and normalized input, selected
+intent label, confidence, score map, fallback state, memory recall summary,
+correction metadata, and response predictor diagnostics.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.
 - Some skills (weather/news/status) depend on external services or app-specific globals and should be wired explicitly or excluded in lightweight deployments.
 - `src/Models/LearningModel.php` is optional and not yet integrated with `SynthetIQ`.
+- Spell correction is lightweight and vocabulary-driven. You can disable it with:
+
+```php
+$ai->enableSpellCorrection(false);
+```
 
 ## Testing
 

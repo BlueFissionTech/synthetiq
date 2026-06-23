@@ -25,7 +25,7 @@ class IntelligenceRouterTest extends TestCase
             public function analyze(string $input, Context $context, array $keywords): Arr
             {
                 $scores = [];
-                $tokens = Str::split(Str::lower($input), ' ');
+                $tokens = Str::make($input)->lower()->split(' ')->toArray();
                 foreach ($keywords as $label => $phrases) {
                     foreach ($phrases as $phrase) {
                         $word = $phrase['text'] ?? '';
@@ -70,7 +70,7 @@ class IntelligenceRouterTest extends TestCase
             public function analyze(string $input, Context $context, array $keywords): Arr
             {
                 $scores = [];
-                $tokens = Str::split(Str::lower($input), ' ');
+                $tokens = Str::make($input)->lower()->split(' ')->toArray();
                 foreach ($keywords as $label => $phrases) {
                     foreach ($phrases as $phrase) {
                         $word = $phrase['text'] ?? '';
@@ -148,7 +148,7 @@ class IntelligenceRouterTest extends TestCase
             public function analyze(string $input, Context $context, array $keywords): Arr
             {
                 $scores = [];
-                $tokens = Str::split(Str::lower($input), ' ');
+                $tokens = Str::make($input)->lower()->split(' ')->toArray();
                 foreach ($keywords as $label => $phrases) {
                     foreach ($phrases as $phrase) {
                         $word = $phrase['text'] ?? '';

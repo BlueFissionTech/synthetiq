@@ -143,6 +143,24 @@ Use `setResponsePredictor(null)` to disable predictor-assisted selection while
 keeping template selection compatible. Custom predictors can expose
 `predictNextWords`, `predictNextWord`, or `predictBeginning`.
 
+## Response Envelope
+
+`processInput(string)` still returns the selected response string. Use
+`processInputEnvelope(string)` when callers need structured diagnostics for a
+turn:
+
+```php
+$result = $ai->processInputEnvelope('hello');
+
+echo $result['response'];
+$intent = $result['intent']['label'];
+$predictor = $result['predictor']['status'];
+```
+
+The envelope includes the response text, raw and normalized input, selected
+intent label, confidence, score map, fallback state, memory recall summary,
+correction metadata, and response predictor diagnostics.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

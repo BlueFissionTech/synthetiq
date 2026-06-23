@@ -18,6 +18,7 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 5. Conversation history and context update for follow-up turns.
 6. Optional memory and fallback hooks can bias intent selection or route to a
    low-confidence fallback.
+7. Optional spell correction can normalize near-miss tokens before routing.
 
 ## Install
 
@@ -127,11 +128,49 @@ $scores = $router->score('hello there', $context);
 $diagnostics = $router->lastDiagnostics();
 ```
 
+## Response Predictor Diagnostics
+
+Response selection uses a bounded trigram predictor when available. The public
+diagnostic contract reports whether that predictor is available, disabled,
+unavailable, or failed, and whether response selection had to fall back to a
+candidate response:
+
+```php
+$diagnostics = $ai->responsePredictorDiagnostics();
+```
+
+Use `setResponsePredictor(null)` to disable predictor-assisted selection while
+keeping template selection compatible. Custom predictors can expose
+`predictNextWords`, `predictNextWord`, or `predictBeginning`.
+
+## Response Envelope
+
+`processInput(string)` still returns the selected response string. Use
+`processInputEnvelope(string)` when callers need structured diagnostics for a
+turn:
+
+```php
+$result = $ai->processInputEnvelope('hello');
+
+echo $result['response'];
+$intent = $result['intent']['label'];
+$predictor = $result['predictor']['status'];
+```
+
+The envelope includes the response text, raw and normalized input, selected
+intent label, confidence, score map, fallback state, memory recall summary,
+correction metadata, and response predictor diagnostics.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.
 - Some skills (weather/news/status) depend on external services or app-specific globals and should be wired explicitly or excluded in lightweight deployments.
 - `src/Models/LearningModel.php` is optional and not yet integrated with `SynthetIQ`.
+- Spell correction is lightweight and vocabulary-driven. You can disable it with:
+
+```php
+$ai->enableSpellCorrection(false);
+```
 
 ## Testing
 

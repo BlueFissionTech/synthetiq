@@ -12,15 +12,19 @@ use BlueFission\SynthetIQ\Responses\Selector;
 use BlueFission\Automata\Analysis\IAnalyzer;
 use BlueFission\Automata\Intent\Matcher;
 use BlueFission\Automata\Language\ContractionNormalizer;
-use BlueFission\Automata\Language\TrigramMarkovPredictor;
 use BlueFission\SynthetIQ\Models\LearningModel;
+use BlueFission\SynthetIQ\Language\BoundedTrigramPredictor;
+use BlueFission\SynthetIQ\Language\SpellCorrector;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
 use BlueFission\Arr;
+use BlueFission\Func;
+use BlueFission\Num;
 use BlueFission\Str;
+use BlueFission\Val;
 use BlueFission\DevElation as Dev;
 
 class SynthetIQ
@@ -39,6 +43,8 @@ class SynthetIQ
     protected $_memoryAdapter;
     protected $_fallbackResponder;
     protected $_confidenceThreshold = 0.35;
+    protected $_spellCorrector;
+    protected bool $_spellCorrectionEnabled = true;
 
     public function __construct(
         IInterpreter $interpreter,
@@ -55,17 +61,18 @@ class SynthetIQ
         $this->_matcher = new Matcher($analyzer);
         $this->_intentClassifier = new IntelligenceRouter($analyzer, $this->_matcher, $routerOptions);
         $this->_responseGenerator = new Generator();
-        $this->_predictor = new TrigramMarkovPredictor();
+        $this->_predictor = new BoundedTrigramPredictor();
         $this->_routes = [];
         $this->_interpreter = $interpreter;
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
-     
-        $this->_responseSelector = new Selector($this->_predictor, [$this, 'evaluateNode']);
+
+        $this->refreshResponseSelector();
     }
 
     public function setMemoryAdapter(MemoryAdapterInterface $adapter): void
@@ -88,9 +95,52 @@ class SynthetIQ
         $this->_confidenceThreshold = $threshold;
     }
 
+    public function enableSpellCorrection(bool $enabled): void
+    {
+        $this->_spellCorrectionEnabled = $enabled;
+        if ($this->_spellCorrector) {
+            $this->_spellCorrector->enable($enabled);
+        }
+    }
+
+    public function setSpellCorrector(?SpellCorrector $corrector): void
+    {
+        $this->_spellCorrector = $corrector;
+        if ($this->_spellCorrector) {
+            $this->_spellCorrector->enable($this->_spellCorrectionEnabled);
+        }
+    }
+
+    public function setResponsePredictor($predictor): void
+    {
+        $this->_predictor = $predictor;
+        $this->refreshResponseSelector();
+    }
+
+    public function responsePredictorDiagnostics(): array
+    {
+        $diagnostics = [];
+        if (
+            $this->_responseSelector
+            && $this->canCall($this->_responseSelector, 'lastDiagnostics')
+        ) {
+            $diagnostics = $this->_responseSelector->lastDiagnostics();
+        }
+
+        if (Val::isEmpty($diagnostics)) {
+            return $this->baseResponsePredictorDiagnostics();
+        }
+
+        return Arr::merge($this->baseResponsePredictorDiagnostics(), $diagnostics);
+    }
+
     public function processInput(string $input): string
     {
+        $rawInput = $input;
+        $this->resetTurnDiagnostics($rawInput);
+
         $input = ContractionNormalizer::normalize($input);
+        $input = $this->normalizeInput($input);
         // Run the input through the interpreter, it will produce an output
         $this->_interpreter->run(Str::lower($input));
 
@@ -104,7 +154,9 @@ class SynthetIQ
         $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
         $confidence = $this->computeConfidence($scores);
 
-        $this->_context->set('intent_scores', $scores ? $scores->toArray() : []);
+        $turnScores = $scores ? $scores->toArray() : [];
+        $this->_context->set('intent_scores', $turnScores);
+        $this->_context->set('selected_intent_scores', $turnScores);
         $this->_context->set('intent_confidence', $confidence);
         Dev::do('synthetiq.intent.scored', [
             'input' => $input,
@@ -117,6 +169,7 @@ class SynthetIQ
             $intent = $this->_context->get('last_intent') ?? new Intent('unknown.intent', 'Unknown');
         }
         $this->_context->set('current_intent', $intent);
+        $this->_context->set('selected_intent_label', $intent->getLabel());
 
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, false);
         if ($fallbackResponse !== null) {
@@ -132,12 +185,13 @@ class SynthetIQ
         }
 
         $responseTypes = $this->_routes[$intent->getLabel()] ?? [];
-        if (empty($responseTypes)) {
+        if (Val::isEmpty($responseTypes)) {
             $responseTypes = [$intent->getLabel()];
-        } elseif (!is_array($responseTypes)) {
+        } elseif (!Arr::is($responseTypes)) {
             $responseTypes = [$responseTypes];
         }
         $responses = [];
+        $responseIntentMap = [];
 
         foreach ($responseTypes as $responseType) {
             $responseIntent = $this->_matcher->getIntent($responseType);
@@ -151,16 +205,18 @@ class SynthetIQ
             }
 
             $responses[$value] = $value;
+            $responseIntentMap[$value] = (string)$responseType;
             // var_dump($responseType, $intent, $value);
         }
 
-        if (empty($responses) && $intent->getLabel() !== 'unknown.intent') {
+        if (Val::isEmpty($responses) && $intent->getLabel() !== 'unknown.intent') {
             $responseTypes = ['unknown.intent'];
             $responseIntent = $this->_matcher->getIntent('unknown.intent');
             if ($responseIntent) {
                 $value = $this->_responseGenerator->generate($input, $responseIntent, $this->_context);
                 if ($value !== '') {
                     $responses[$value] = $value;
+                    $responseIntentMap[$value] = 'unknown.intent';
                 }
             }
         }
@@ -169,9 +225,11 @@ class SynthetIQ
 
         $this->_input = $input;
         $response = '';
-        if (!empty($responses)) {
+        if (Val::isNotEmpty($responses)) {
             // Use selector scoring to choose a consistent response.
             $response = $this->_responseSelector->select($input, $responses, $this->_context);
+            $this->recordSelectedResponseIntent($response, $responseIntentMap, $memoryRecall);
+            $this->recordResponsePredictorDiagnostics();
         }
         $this->_input = '';
 
@@ -182,6 +240,8 @@ class SynthetIQ
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, true);
         if ($fallbackResponse !== null) {
             $response = $fallbackResponse;
+            $this->_context->set('selected_intent_label', $intent->getLabel());
+            $this->_context->set('selected_intent_scores', $turnScores);
         }
 
         $this->_history->addEntry($input, $response);
@@ -194,8 +254,15 @@ class SynthetIQ
         return $response;
     }
 
+    public function processInputEnvelope(string $input): array
+    {
+        $response = $this->processInput($input);
+
+        return $this->buildResponseEnvelope($input, $response);
+    }
+
     public function addRoute($statement, $type, $to = []) {
-        if (!is_array($to)) {
+        if (!Arr::is($to)) {
             $to = [$to];
         }
 
@@ -213,15 +280,20 @@ class SynthetIQ
         //     $this->_responseGenerator->addTemplate($category, $statement);
         // }
 
-        if (!isset($this->_routes[$type])) {
+        if (!Arr::hasKey($this->_routes, $type)) {
             $this->_routes[$type] = $to;
-        } elseif (!empty($to)) {
-            $this->_routes[$type] = Arr::merge($this->_routes[$type], $to);
+        } elseif (Arr::count($to) > 0) {
+            $existingRoutes = Arr::is($this->_routes[$type]) ? $this->_routes[$type] : [$this->_routes[$type]];
+            $this->_routes[$type] = Arr::values(Arr::unique(Arr::merge($existingRoutes, $to)));
         }
 
-        if ($statement !== '') {
-            $this->_predictor->addSentence($statement);
+        if (Val::isNotEmpty($statement)) {
+            if ($this->canCall($this->_predictor, 'addSentence')) {
+                $this->_predictor->addSentence($statement);
+            }
         }
+
+        $this->updateSpellVocabulary((string)$statement);
 
         if ($this->_intentClassifier instanceof IntelligenceRouter) {
             $this->_intentClassifier->markDirty();
@@ -230,7 +302,7 @@ class SynthetIQ
 
     public function addIntentKeywords(string $type, array $keywords, ?int $priorityBase = null): void
     {
-        if (empty($keywords)) {
+        if (Arr::count($keywords) === 0) {
             return;
         }
 
@@ -242,13 +314,15 @@ class SynthetIQ
 
         foreach ($keywords as $keyword) {
             $keyword = Str::trim((string)$keyword);
-            if ($keyword === '') {
+            if (Val::isEmpty($keyword)) {
                 continue;
             }
 
             $priority = $this->computePriority($keyword, $priorityBase ?? 12);
             $intent->addCriteria('keywords', ['word' => $keyword, 'priority' => $priority]);
         }
+
+        $this->updateSpellVocabulary($keywords);
 
         if ($this->_intentClassifier instanceof IntelligenceRouter) {
             $this->_intentClassifier->markDirty();
@@ -266,19 +340,19 @@ class SynthetIQ
 
     protected function applyIntentBiases(?Arr $scores, array $biases): ?Arr
     {
-        if (!$scores instanceof Arr || empty($biases)) {
+        if (!$scores instanceof Arr || Arr::count($biases) === 0) {
             return $scores;
         }
 
         $updated = $scores->toArray();
         foreach ($biases as $label => $weight) {
-            if (!is_numeric($weight)) {
+            if (!Num::is($weight)) {
                 continue;
             }
             $updated[$label] = ($updated[$label] ?? 0.0) + (float)$weight;
         }
 
-        if (!empty($updated)) {
+        if (Arr::count($updated) > 0) {
             arsort($updated);
         }
 
@@ -287,11 +361,11 @@ class SynthetIQ
 
     protected function computeConfidence(?Arr $scores): float
     {
-        if (!$scores instanceof Arr || $scores->count() === 0) {
+        if (!$scores instanceof Arr || Arr::count($scores->toArray()) === 0) {
             return 0.0;
         }
 
-        $values = array_values($scores->toArray());
+        $values = Arr::values($scores->toArray());
         $topScore = (float)($values[0] ?? 0.0);
         $secondScore = (float)($values[1] ?? 0.0);
 
@@ -301,6 +375,52 @@ class SynthetIQ
 
         $denom = $topScore + $secondScore;
         return $denom > 0.0 ? ($topScore / $denom) : 0.0;
+    }
+
+    protected function normalizeInput(string $input): string
+    {
+        if (!$this->_spellCorrector || !$this->_spellCorrectionEnabled) {
+            return $input;
+        }
+
+        $normalized = $this->_spellCorrector->normalize($input);
+        if ($normalized !== $input) {
+            $this->_context->set('input_original', $input);
+            $this->_context->set('input_corrected', $normalized);
+            Dev::do('synthetiq.input.corrected', [
+                'original' => $input,
+                'corrected' => $normalized,
+            ]);
+        }
+
+        return $normalized;
+    }
+
+    protected function resetTurnDiagnostics(string $input): void
+    {
+        $this->_context->set('input_raw', $input);
+        $this->_context->set('input_original', null);
+        $this->_context->set('input_corrected', null);
+        $this->_context->set('fallback_used', false);
+        $this->_context->set('fallback_reason', null);
+        $this->_context->set('memory_recall', []);
+        $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
+        $this->_context->set('selected_intent_label', null);
+        $this->_context->set('selected_intent_scores', []);
+    }
+
+    protected function updateSpellVocabulary($terms): void
+    {
+        if (!$this->_spellCorrector) {
+            return;
+        }
+
+        if (Arr::is($terms)) {
+            $this->_spellCorrector->addTerms($terms);
+            return;
+        }
+
+        $this->_spellCorrector->addText((string)$terms);
     }
 
     protected function determineFallbackReason(?Intent $intent, ?Arr $scores, float $confidence, bool $allowLowConfidence): ?string
@@ -313,7 +433,7 @@ class SynthetIQ
             return 'unknown_intent';
         }
 
-        if (!$scores instanceof Arr || $scores->count() === 0) {
+        if (!$scores instanceof Arr || Arr::count($scores->toArray()) === 0) {
             return 'no_scores';
         }
 
@@ -345,7 +465,7 @@ class SynthetIQ
 
         $response = $this->_fallbackResponder->respond($input, $this->_context, $meta);
 
-        if (is_string($response) && $response !== '') {
+        if (Str::is($response) && Val::isNotEmpty($response)) {
             $this->_context->set('fallback_used', true);
             $this->_context->set('fallback_reason', $reason);
             Dev::do('synthetiq.fallback.triggered', $meta);
@@ -400,18 +520,125 @@ class SynthetIQ
         return $meta;
     }
 
+    protected function refreshResponseSelector(): void
+    {
+        $this->_responseSelector = new Selector($this->_predictor, [$this, 'evaluateNode']);
+    }
+
+    protected function baseResponsePredictorDiagnostics(): array
+    {
+        $canPredictNextWords = $this->canCall($this->_predictor, 'predictNextWords');
+        $canPredictNextWord = $this->canCall($this->_predictor, 'predictNextWord');
+        $canPredictBeginning = $this->canCall($this->_predictor, 'predictBeginning');
+
+        $status = 'available';
+        if ($this->_predictor === null) {
+            $status = 'disabled';
+        } elseif (!$canPredictNextWords && !$canPredictNextWord && !$canPredictBeginning) {
+            $status = 'unavailable';
+        }
+
+        return [
+            'status' => $status,
+            'predictor' => is_object($this->_predictor) ? get_class($this->_predictor) : null,
+            'can_predict_next_words' => $canPredictNextWords,
+            'can_predict_next_word' => $canPredictNextWord,
+            'can_predict_beginning' => $canPredictBeginning,
+            'fallback_used' => false,
+            'fallback_reason' => null,
+            'error' => null,
+        ];
+    }
+
+    protected function recordResponsePredictorDiagnostics(): array
+    {
+        $diagnostics = $this->responsePredictorDiagnostics();
+        $this->_context->set('response_predictor', $diagnostics);
+
+        if (($diagnostics['fallback_used'] ?? false) || ($diagnostics['status'] ?? 'available') !== 'available') {
+            Dev::do('synthetiq.response.predictor.fallback', $diagnostics);
+        }
+
+        return $diagnostics;
+    }
+
+    protected function recordSelectedResponseIntent(string $response, array $responseIntentMap, ?MemoryRecall $memoryRecall): void
+    {
+        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
+            return;
+        }
+
+        if (!Arr::hasKey($responseIntentMap, $response)) {
+            return;
+        }
+
+        $label = (string)$responseIntentMap[$response];
+        if (Val::isEmpty($label)) {
+            return;
+        }
+
+        $this->_context->set('selected_intent_label', $label);
+        $this->_context->set('selected_intent_scores', [$label => 1.0]);
+    }
+
+    protected function buildResponseEnvelope(string $input, string $response): array
+    {
+        $intent = $this->_context->get('current_intent');
+        $intentLabel = $this->_context->get('selected_intent_label');
+        $scores = $this->arrayContextValue('selected_intent_scores');
+        if (Val::isEmpty($scores)) {
+            $scores = $this->arrayContextValue('intent_scores');
+        }
+        $scoredLabel = Arr::keys($scores)[0] ?? null;
+        $corrected = $this->_context->get('input_corrected');
+        $original = $this->_context->get('input_original');
+        $memoryRecall = $this->_context->get('memory_recall');
+        $predictor = $this->_context->get('response_predictor');
+
+        return [
+            'response' => $response,
+            'input' => [
+                'raw' => $input,
+                'normalized' => Str::is($corrected) && Val::isNotEmpty($corrected) ? $corrected : $input,
+            ],
+            'intent' => [
+                'label' => Str::is($scoredLabel) ? $scoredLabel : (Str::is($intentLabel) ? $intentLabel : ($intent instanceof Intent ? $intent->getLabel() : null)),
+                'confidence' => (float)($this->_context->get('intent_confidence') ?? 0.0),
+                'scores' => $scores,
+            ],
+            'fallback' => [
+                'used' => (bool)$this->_context->get('fallback_used'),
+                'reason' => $this->_context->get('fallback_reason'),
+            ],
+            'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'correction' => [
+                'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
+                'original' => $original,
+                'corrected' => $corrected,
+            ],
+            'predictor' => Arr::is($predictor) ? $predictor : $this->responsePredictorDiagnostics(),
+        ];
+    }
+
+    protected function arrayContextValue(string $key): array
+    {
+        $value = $this->_context->get($key);
+
+        return Arr::is($value) ? $value : [];
+    }
+
     public function evaluateNode(array $node): int
     {
         $score = 0;
         // echo $node['response'] . "\n";
         $expectedIntents = $this->_context->get('expected_intents') ?? [];
-        if (!is_array($expectedIntents)) {
+        if (!Arr::is($expectedIntents)) {
             $expectedIntents = [$expectedIntents];
         }
 
         // Check if the intent of the phrase is the same
         $intent = $this->_intentClassifier->classify($node['response'], $this->_context);
-        if ($intent && in_array($intent->getLabel(), $expectedIntents, true)) {
+        if ($intent && Arr::has($expectedIntents, $intent->getLabel(), true)) {
             // echo "-- Intent match\n";
             $score += 3;
         }
@@ -421,7 +648,7 @@ class SynthetIQ
             // echo "-- Interpreter match\n";
             $score += 2;
 
-            if (method_exists($this->_interpreter, 'tokenize') && method_exists($this->_interpreter, 'parse')) {
+            if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
                 $tokens = $this->_interpreter->tokenize($node['response']);
                 $output = $this->_interpreter->parse($tokens);
             }
@@ -450,19 +677,23 @@ class SynthetIQ
             Str::split($node['response'], ' '),
             Str::split($this->_input, ' ')
         );
-        if (count($sharedTokens) > 0) {
+        if (Arr::count($sharedTokens) > 0) {
             // echo "-- Token match\n";
             $score += 3;
         }
 
         // Short length penalty
         $length = Str::len($node['response']);
-        $penalty = 10 - max(0, $length - 10);
-        $score -= round($penalty / 2);
+        $penalty = 10 - Num::max(0, $length - 10);
+        $score -= Num::round($penalty / 2);
 
         // echo "\n";
 
         return $score;
     }
-}
 
+    protected function canCall($target, string $method): bool
+    {
+        return is_object($target) && Func::isCallable([$target, $method]);
+    }
+}

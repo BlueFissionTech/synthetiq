@@ -136,7 +136,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
 
     protected function tokenize(string $input): array
     {
-        $input = Str::lower(Str::trim($input));
+        $input = Str::make($input)->trim()->lower()->val();
         if (Val::isEmpty($input)) {
             return [];
         }

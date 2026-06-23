@@ -240,6 +240,8 @@ class SynthetIQ
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, true);
         if ($fallbackResponse !== null) {
             $response = $fallbackResponse;
+            $this->_context->set('selected_intent_label', $intent->getLabel());
+            $this->_context->set('selected_intent_scores', $turnScores);
         }
 
         $this->_history->addEntry($input, $response);
@@ -280,7 +282,7 @@ class SynthetIQ
 
         if (!Arr::hasKey($this->_routes, $type)) {
             $this->_routes[$type] = $to;
-        } elseif (Val::isNotEmpty($to)) {
+        } elseif (Arr::count($to) > 0) {
             $existingRoutes = Arr::is($this->_routes[$type]) ? $this->_routes[$type] : [$this->_routes[$type]];
             $this->_routes[$type] = Arr::values(Arr::unique(Arr::merge($existingRoutes, $to)));
         }
@@ -300,7 +302,7 @@ class SynthetIQ
 
     public function addIntentKeywords(string $type, array $keywords, ?int $priorityBase = null): void
     {
-        if (Val::isEmpty($keywords)) {
+        if (Arr::count($keywords) === 0) {
             return;
         }
 
@@ -338,7 +340,7 @@ class SynthetIQ
 
     protected function applyIntentBiases(?Arr $scores, array $biases): ?Arr
     {
-        if (!$scores instanceof Arr || Val::isEmpty($biases)) {
+        if (!$scores instanceof Arr || Arr::count($biases) === 0) {
             return $scores;
         }
 
@@ -350,7 +352,7 @@ class SynthetIQ
             $updated[$label] = ($updated[$label] ?? 0.0) + (float)$weight;
         }
 
-        if (Val::isNotEmpty($updated)) {
+        if (Arr::count($updated) > 0) {
             arsort($updated);
         }
 
@@ -359,7 +361,7 @@ class SynthetIQ
 
     protected function computeConfidence(?Arr $scores): float
     {
-        if (!$scores instanceof Arr || $scores->count() === 0) {
+        if (!$scores instanceof Arr || Arr::count($scores->toArray()) === 0) {
             return 0.0;
         }
 
@@ -431,7 +433,7 @@ class SynthetIQ
             return 'unknown_intent';
         }
 
-        if (!$scores instanceof Arr || $scores->count() === 0) {
+        if (!$scores instanceof Arr || Arr::count($scores->toArray()) === 0) {
             return 'no_scores';
         }
 
@@ -636,7 +638,7 @@ class SynthetIQ
 
         // Check if the intent of the phrase is the same
         $intent = $this->_intentClassifier->classify($node['response'], $this->_context);
-        if ($intent && in_array($intent->getLabel(), $expectedIntents, true)) {
+        if ($intent && Arr::has($expectedIntents, $intent->getLabel(), true)) {
             // echo "-- Intent match\n";
             $score += 3;
         }

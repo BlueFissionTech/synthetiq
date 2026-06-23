@@ -4,6 +4,7 @@ namespace BlueFission\SynthetIQ\Language;
 
 use BlueFission\Arr;
 use BlueFission\Collections\Collection;
+use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\DevElation as Dev;
 
@@ -18,20 +19,20 @@ class SpellCorrector
 
     public function __construct(array $options = [])
     {
-        if (isset($options['enabled'])) {
+        if (Arr::hasKey($options, 'enabled')) {
             $this->_enabled = (bool)$options['enabled'];
         }
-        if (isset($options['min_token_length'])) {
-            $this->_minTokenLength = max(1, (int)$options['min_token_length']);
+        if (Arr::hasKey($options, 'min_token_length')) {
+            $this->_minTokenLength = (int)Num::max(1, (int)$options['min_token_length']);
         }
-        if (isset($options['max_distance'])) {
-            $this->_maxDistance = max(0, (int)$options['max_distance']);
+        if (Arr::hasKey($options, 'max_distance')) {
+            $this->_maxDistance = (int)Num::max(0, (int)$options['max_distance']);
         }
-        if (isset($options['min_similarity'])) {
-            $this->_minSimilarity = max(0.0, min(1.0, (float)$options['min_similarity']));
+        if (Arr::hasKey($options, 'min_similarity')) {
+            $this->_minSimilarity = Num::max(0.0, Num::min(1.0, (float)$options['min_similarity']));
         }
-        if (isset($options['max_vocabulary'])) {
-            $this->_maxVocabulary = max(1, (int)$options['max_vocabulary']);
+        if (Arr::hasKey($options, 'max_vocabulary')) {
+            $this->_maxVocabulary = (int)Num::max(1, (int)$options['max_vocabulary']);
         }
     }
 
@@ -54,7 +55,7 @@ class SpellCorrector
                 continue;
             }
             $this->_vocabulary[$token] = true;
-            if (count($this->_vocabulary) >= $this->_maxVocabulary) {
+            if (Arr::count($this->_vocabulary) >= $this->_maxVocabulary) {
                 break;
             }
         }
@@ -70,18 +71,15 @@ class SpellCorrector
     {
         $input = Dev::apply('synthetiq.spellcorrector.normalize.1', $input);
 
-        if (!$this->_enabled || empty($this->_vocabulary)) {
+        if (!$this->_enabled || Arr::count($this->_vocabulary) === 0) {
             return $input;
         }
 
-        $parts = preg_split('/([^\p{L}\p{N}]+)/u', $input, -1, PREG_SPLIT_DELIM_CAPTURE);
-        if (!is_array($parts)) {
-            return $input;
-        }
+        $parts = Str::splitBy($input, '/([^\p{L}\p{N}]+)/u', -1, PREG_SPLIT_DELIM_CAPTURE);
 
         $updated = [];
         foreach ($parts as $part) {
-            if ($part === '' || preg_match('/^[^\p{L}\p{N}]+$/u', $part)) {
+            if ($part === '' || Str::matches($part, '/^[^\p{L}\p{N}]+$/u')) {
                 $updated[] = $part;
                 continue;
             }
@@ -107,7 +105,7 @@ class SpellCorrector
             return $token;
         }
 
-        if (isset($this->_vocabulary[$normalized])) {
+        if (Arr::hasKey($this->_vocabulary, $normalized)) {
             return $token;
         }
 
@@ -115,7 +113,7 @@ class SpellCorrector
             return $token;
         }
 
-        if (preg_match('/\\d/', $normalized)) {
+        if (Str::matches($normalized, '/\\d/')) {
             return $token;
         }
 
@@ -128,7 +126,7 @@ class SpellCorrector
                 return $token;
             }
 
-            $lengthDelta = abs(Str::len($candidate) - Str::len($normalized));
+            $lengthDelta = Num::abs(Str::len($candidate) - Str::len($normalized));
             if ($lengthDelta > $this->_maxDistance) {
                 continue;
             }
@@ -138,7 +136,7 @@ class SpellCorrector
                 continue;
             }
 
-            $maxLength = max(Str::len($candidate), Str::len($normalized));
+            $maxLength = Num::max(Str::len($candidate), Str::len($normalized));
             $similarity = $maxLength > 0 ? 1.0 - ($distance / $maxLength) : 1.0;
 
             if ($similarity < $this->_minSimilarity) {
@@ -166,8 +164,8 @@ class SpellCorrector
             return '';
         }
 
-        $token = preg_replace('/^\\W+|\\W+$/u', '', $token);
-        if (!is_string($token)) {
+        $token = Str::replacePattern($token, '/^\\W+|\\W+$/u', '');
+        if (!Str::is($token)) {
             return '';
         }
 
@@ -176,10 +174,7 @@ class SpellCorrector
 
     protected function tokenize(string $text): array
     {
-        $parts = preg_split('/[^\\p{L}\\p{N}]+/u', $text, -1, PREG_SPLIT_NO_EMPTY);
-        if (!is_array($parts)) {
-            return [];
-        }
+        $parts = Str::splitBy($text, '/[^\\p{L}\\p{N}]+/u', -1, PREG_SPLIT_NO_EMPTY);
 
         $tokens = (new Collection($parts))
             ->map(function ($token) {
@@ -200,8 +195,8 @@ class SpellCorrector
         }
 
         $first = $original[0] ?? '';
-        if ($first !== '' && strtoupper($first) === $first) {
-            return ucfirst($replacement);
+        if ($first !== '' && Str::upper($first) === $first) {
+            return Str::capitalize($replacement);
         }
 
         return $replacement;

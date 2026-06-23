@@ -83,7 +83,7 @@ class BoundedTrigramPredictor
 
     public function tokenize(string $sentence): array
     {
-        $tokens = preg_split('/\s+/', Str::lower(Str::trim($sentence)), -1, PREG_SPLIT_NO_EMPTY);
+        $tokens = Str::splitBy(Str::lower(Str::trim($sentence)), '/\s+/', -1, PREG_SPLIT_NO_EMPTY);
 
         return Arr::is($tokens) ? $tokens : [];
     }
@@ -102,12 +102,16 @@ class BoundedTrigramPredictor
 
     protected function weightedPick(array $weights): ?string
     {
-        $total = array_sum($weights);
+        $total = 0;
+        foreach ($weights as $weight) {
+            $total = (int)Num::add($total, (int)$weight);
+        }
+
         if ($total <= 0) {
             return null;
         }
 
-        $rand = mt_rand(1, $total);
+        $rand = (int)Num::rand($total, 1);
         foreach ($weights as $word => $weight) {
             $rand -= $weight;
             if ($rand <= 0) {

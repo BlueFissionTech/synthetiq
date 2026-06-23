@@ -3,6 +3,7 @@
 namespace BlueFission\SynthetIQ\Tests;
 
 use BlueFission\Automata\Context;
+use BlueFission\Collections\Collection;
 use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\SynthetIQ\ConversationHistory;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
@@ -129,9 +130,11 @@ class SynthetIQTest extends TestCase
         $criteria = $intent->getCriteria();
         $this->assertArrayHasKey('keywords', $criteria);
 
-        $words = array_map(function ($keyword) {
-            return $keyword['word'] ?? null;
-        }, $criteria['keywords']);
+        $words = (new Collection($criteria['keywords']))
+            ->map(function ($keyword) {
+                return $keyword['word'] ?? null;
+            })
+            ->toArray();
 
         $this->assertContains('status', $words);
         $this->assertContains('update', $words);
@@ -248,7 +251,10 @@ class SynthetIQTest extends TestCase
         ]);
         $interpreter = new FakeInterpreter();
         $fallback = new EnvelopeFallbackResponder('fallback-response');
-        $ai = new SynthetIQ($interpreter, $analyzer, null, null, $fallback);
+        $ai = new SynthetIQ($interpreter, $analyzer, null, null, $fallback, null, [
+            'enable_keyword_overlap' => false,
+            'enable_naive_bayes' => false,
+        ]);
         $ai->setConfidenceThreshold(0.7);
 
         $ai->addRoute('hello', 'greeting.intent', []);

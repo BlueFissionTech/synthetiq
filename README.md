@@ -66,6 +66,7 @@ See `example.php` for a CLI and browser demo.
 - `examples/batch.php` runs a fixed number of inputs from `sample_configs/statements.php`.
 - `examples/sequence.php` runs three batches of 15 inputs each, then exits.
 - `examples/evaluator.php` runs a lightweight intent accuracy report from `sample_configs/eval_cases.php`.
+- `examples/jenss/` contains optional JenSS stress fixtures for declarative route catalogs and feedback gates.
 
 ## Client Configuration
 
@@ -103,6 +104,12 @@ This keeps behavior simple, repeatable, and easy to customize.
 
 ```bash
 vendor/bin/phpunit --do-not-cache-result
+```
+
+Optional JenSS fixture smoke tests require a local Jenerator autoload path:
+
+```bash
+SYNTHETIQ_JENERATOR_AUTOLOAD=/path/to/jenerator/vendor/autoload.php vendor/bin/phpunit --do-not-cache-result tests/Jenss
 ```
 
 ## Benchmarking

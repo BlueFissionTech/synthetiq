@@ -22,6 +22,8 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 
 ## Install
 
+SynthetIQ targets PHP 8.2 or newer.
+
 ```bash
 composer install
 ```
@@ -67,6 +69,7 @@ See `example.php` for a CLI and browser demo.
 - `examples/batch.php` runs a fixed number of inputs from `sample_configs/statements.php`.
 - `examples/sequence.php` runs three batches of 15 inputs each, then exits.
 - `examples/evaluator.php` runs a lightweight intent accuracy report from `sample_configs/eval_cases.php`.
+- `examples/route_state.php` compiles, saves, loads, and applies cached route state.
 - `examples/jenss/` contains optional JenSS stress fixtures for declarative route catalogs and feedback gates.
 
 ## Client Configuration
@@ -194,6 +197,7 @@ correction metadata, and response predictor diagnostics.
 - This library is not a generative model. It predicts and selects from known statements.
 - Some skills (weather/news/status) depend on external services or app-specific globals and should be wired explicitly or excluded in lightweight deployments.
 - `src/Models/LearningModel.php` is optional and not yet integrated with `SynthetIQ`.
+- Generated cache and model artifacts belong under `models/` and should not be committed.
 - Spell correction is lightweight and vocabulary-driven. You can disable it with:
 
 ```php
@@ -201,6 +205,9 @@ $ai->enableSpellCorrection(false);
 ```
 
 ## Testing
+
+See `tests.md` for the full clean-install checklist, focused suites, optional
+fixture environment variables, and generated artifact policy.
 
 ```bash
 vendor/bin/phpunit --do-not-cache-result
@@ -217,6 +224,8 @@ SYNTHETIQ_JENERATOR_AUTOLOAD=/path/to/jenerator/vendor/autoload.php vendor/bin/p
 ```bash
 php benchmarks/selection.php 1000 50 5
 ```
+
+The current benchmark is a local smoke command, not a hard CI budget gate.
 
 ## License
 

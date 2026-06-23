@@ -11,27 +11,34 @@ Automata and Develation for language, memory, and orchestration primitives.
 
 1. **Input normalization**
    - `BlueFission\Automata\Language\ContractionNormalizer` runs before parsing.
+   - `BlueFission\SynthetIQ\Language\SpellCorrector` can apply optional
+     vocabulary-driven correction before routing.
 2. **Interpretation**
    - `BlueFission\Automata\Language\Interpreter` applies grammar/token rules.
 3. **Intent classification**
-   - `BlueFission\SynthetIQ\Intents\Classifier` uses Automata `Matcher` and
-     `KeywordTopicAnalyzer`, with keyword fallback.
+   - `BlueFission\SynthetIQ\Intents\IntelligenceRouter` combines matcher,
+     keyword overlap, and optional Naive Bayes strategies.
+   - `BlueFission\SynthetIQ\Intents\Classifier` remains the baseline fallback
+     classifier surface.
 4. **Response generation**
    - `BlueFission\SynthetIQ\Responses\Generator` renders templates via
      `BlueFission\HTML\Template`.
 5. **Response selection**
    - `BlueFission\SynthetIQ\Responses\Selector` scores candidates using a
      trigram predictor and heuristics.
-6. **Learning fallback**
-   - `BlueFission\SynthetIQ\Models\LearningModel` supplies a Markov-style
-     fallback when no response is selected.
+6. **Diagnostics and fallback**
+   - `FallbackResponderInterface` handles configured unknown or low-confidence
+     fallback paths.
+   - Response envelopes expose intent, score, fallback, memory, correction, and
+     predictor diagnostics.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
-8. **Memory + fallback hooks**
+8. **Memory hooks**
    - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
-   - `FallbackResponderInterface` provides a low-confidence fallback path
-     (e.g., quantized LLM) with audit hooks.
+9. **Route-state lifecycle**
+   - `RouteTrainer` compiles, saves, validates, and applies cached route
+     catalogs for offline preparation.
 
 ## Data Surfaces
 
@@ -46,11 +53,12 @@ SmarterChild and Tay used massive curated datasets, continuous user feedback,
 and large-scale retrieval pipelines. SynthetIQ currently lacks:
 
 - Large, diverse training corpora and retrieval pipelines.
-- Multi-stage intent routing with confidence and fallbacks.
-- Robust short-term memory and dialog state tracking.
+- Full multi-turn flow graphs with slots, completion, and cancellation.
+- Robust response-time use of recalled memory episodes and entity metadata.
 - Dynamic persona or mood state for consistent voice.
-- Spelling tolerance and fuzzy matching beyond basic similarity.
-- Automated evaluation gates (accuracy, coherence, safety).
+- Phonetic and synonym-aware normalization beyond vocabulary edit distance.
+- Production safety filters and audit-log policy gates.
+- CI-enforced benchmark budgets.
 
 ## Target Architecture (Non-Generative)
 

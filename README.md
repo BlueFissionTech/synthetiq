@@ -32,11 +32,13 @@ composer install
 
 ```php
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\SynthetIQ\Training\RouteTrainer;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Documenter, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 
 $dialogue = require 'sample_configs/dialogue.php';
+$intentBoosts = require 'sample_configs/intent_boosts.php';
 $grammar = require 'sample_configs/grammar.php';
 $tokens = require 'sample_configs/tokens.php';
 $documenter = require 'sample_configs/documenter.php';
@@ -51,26 +53,37 @@ $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, 'models/m
 
 $ai = new SynthetIQ($interpreter, $analyzer);
 
-foreach ($dialogue as $category => $info) {
-    foreach ($info[1] as $statement) {
-        $ai->addRoute($statement, $category, $info[0]);
-    }
-}
+RouteTrainer::train($ai, $dialogue, $intentBoosts);
 
-echo $ai->processInput('hello');
+$result = $ai->processInputEnvelope('hello');
+echo $result['response'];
 ```
 
 See `example.php` for a CLI and browser demo.
 
 ## Examples
 
-- `examples/cli.php` runs a CLI-only loop with the sample configs.
-- `examples/minimal.php` shows a small routing setup for quick experiments.
+- `examples/support.php` provides the shared sample bootstrap used by the examples.
+- `example.php` runs a small browser and CLI demo that returns response envelopes.
+- `examples/cli.php` runs a CLI-only loop with the sample configs and current route trainer.
+- `examples/minimal.php` shows a small custom routing setup for quick experiments.
 - `examples/batch.php` runs a fixed number of inputs from `sample_configs/statements.php`.
-- `examples/sequence.php` runs three batches of 15 inputs each, then exits.
-- `examples/evaluator.php` runs a lightweight intent accuracy report from `sample_configs/eval_cases.php`.
-- `examples/route_state.php` compiles, saves, loads, and applies cached route state.
+- `examples/sequence.php` runs curated multi-turn batches and reports selected intents.
+- `examples/envelope.php` prints the structured response envelope, fallback state, correction metadata, and predictor diagnostics.
+- `examples/evaluator.php` runs an intent accuracy report through the current envelope API.
+- `examples/route_state.php` compiles, saves, loads, verifies, and applies cached route state.
 - `examples/jenss/` contains optional JenSS stress fixtures for declarative route catalogs and feedback gates.
+
+Useful smoke commands:
+
+```bash
+php example.php hello
+php examples/minimal.php hello
+php examples/envelope.php hello
+php examples/evaluator.php --no-progress
+php examples/route_state.php --write --state=models/routes/synthetiq_routes.json --apply --probe=hello
+php benchmarks/selection.php 1000 50 5
+```
 
 ## Client Configuration
 

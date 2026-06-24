@@ -1,32 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 use BlueFission\Arr;
 use BlueFission\Automata\Analysis\IAnalyzer;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Language\IInterpreter;
 use BlueFission\Num;
+use BlueFission\Security\Hash;
 use BlueFission\Str;
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\Val;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-class BenchmarkAnalyzer implements IAnalyzer
+final class BenchmarkAnalyzer implements IAnalyzer
 {
-    protected $_labels;
+    protected array $labels;
 
     public function __construct(array $labels)
     {
-        $this->_labels = Arr::values($labels);
+        $this->labels = Arr::values($labels);
     }
 
     public function analyze(string $input, Context $context, array $keywords): Arr
     {
-        $index = crc32($input) % Num::max(1, Arr::count($this->_labels));
-        return new Arr([$this->_labels[$index] => 1]);
+        $hash = Hash::value($input, 'crc32b');
+        $index = (int)hexdec($hash) % (int)Num::max(1, Arr::count($this->labels));
+
+        return new Arr([$this->labels[$index] => 1]);
     }
 }
 
-class BenchmarkInterpreter implements IInterpreter
+final class BenchmarkInterpreter implements IInterpreter
 {
     public function load($file)
     {
@@ -50,7 +56,7 @@ class BenchmarkInterpreter implements IInterpreter
 
     public function tokenize(string $code): array
     {
-        return preg_split('/\s+/', Str::trim($code)) ?: [];
+        return Str::make($code)->trim()->splitBy('/\s+/')->toArray();
     }
 
     public function parse(array $tokens): array
@@ -59,18 +65,31 @@ class BenchmarkInterpreter implements IInterpreter
     }
 }
 
-$iterations = (int)($argv[1] ?? 1000);
-$intentCount = (int)($argv[2] ?? 50);
-$templatesPerIntent = (int)($argv[3] ?? 5);
+function synthetiq_benchmark_argument(array $argv, int $index, int $default): int
+{
+    $value = $argv[$index] ?? $default;
+
+    return Num::is($value) ? (int)$value : $default;
+}
+
+$iterations = (int)Num::max(1, synthetiq_benchmark_argument($argv ?? [], 1, 1000));
+$intentCount = (int)Num::max(1, synthetiq_benchmark_argument($argv ?? [], 2, 50));
+$templatesPerIntent = (int)Num::max(1, synthetiq_benchmark_argument($argv ?? [], 3, 5));
 
 $labels = [];
 for ($i = 0; $i < $intentCount; $i++) {
-    $labels[] = "intent.$i";
+    $labels[] = "intent.{$i}";
 }
 
-$analyzer = new BenchmarkAnalyzer($labels);
-$interpreter = new BenchmarkInterpreter();
-$ai = new SynthetIQ($interpreter, $analyzer);
+$ai = new SynthetIQ(
+    new BenchmarkInterpreter(),
+    new BenchmarkAnalyzer($labels),
+    null,
+    null,
+    null,
+    null,
+    ['enable_naive_bayes' => false]
+);
 
 foreach ($labels as $label) {
     for ($j = 0; $j < $templatesPerIntent; $j++) {
@@ -86,9 +105,12 @@ for ($i = 0; $i < $iterations; $i++) {
 
 $elapsed = microtime(true) - $start;
 $perSecond = $elapsed > 0 ? $iterations / $elapsed : $iterations;
+$elapsedText = (string)Num::make($elapsed)->precision(4);
+$throughputText = (string)Num::make($perSecond)->precision(2);
 
 echo "Iterations: {$iterations}\n";
 echo "Intents: {$intentCount}\n";
 echo "Templates per intent: {$templatesPerIntent}\n";
-echo "Elapsed: " . number_format($elapsed, 4) . "s\n";
-echo "Throughput: " . number_format($perSecond, 2) . " inputs/s\n";
+echo "Elapsed: {$elapsedText}s\n";
+echo "Throughput: {$throughputText} inputs/s\n";
+echo 'Predictor: ' . (string)($ai->responsePredictorDiagnostics()['status'] ?? 'unknown') . "\n";

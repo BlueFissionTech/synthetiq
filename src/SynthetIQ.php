@@ -353,10 +353,32 @@ class SynthetIQ
         }
 
         if (Arr::count($updated) > 0) {
-            arsort($updated);
+            $updated = $this->sortScoreMap($updated);
         }
 
         return Arr::make($updated);
+    }
+
+    protected function sortScoreMap(array $scores): array
+    {
+        $pairs = [];
+        foreach ($scores as $label => $score) {
+            $pairs[] = [
+                'label' => $label,
+                'score' => $score,
+            ];
+        }
+
+        $pairs = Arr::make($pairs)->sort(function ($left, $right) {
+            return $right['score'] <=> $left['score'];
+        })->toArray();
+
+        $sorted = [];
+        foreach ($pairs as $pair) {
+            $sorted[$pair['label']] = $pair['score'];
+        }
+
+        return $sorted;
     }
 
     protected function computeConfidence(?Arr $scores): float
@@ -404,6 +426,8 @@ class SynthetIQ
         $this->_context->set('fallback_used', false);
         $this->_context->set('fallback_reason', null);
         $this->_context->set('memory_recall', []);
+        $this->_context->set('memory_response_context', []);
+        $this->_context->set('memory_selection', []);
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
@@ -486,6 +510,7 @@ class SynthetIQ
         $recall = $this->_memoryAdapter->recall($input, $this->_context, $meta);
         if (!$recall->isEmpty()) {
             $this->_context->set('memory_recall', $recall->toArray());
+            $this->_context->set('memory_response_context', $this->buildMemoryResponseContext($recall));
         }
 
         return $recall;
@@ -564,16 +589,17 @@ class SynthetIQ
 
     protected function recordSelectedResponseIntent(string $response, array $responseIntentMap, ?MemoryRecall $memoryRecall): void
     {
-        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
-            return;
-        }
-
         if (!Arr::hasKey($responseIntentMap, $response)) {
             return;
         }
 
         $label = (string)$responseIntentMap[$response];
         if (Val::isEmpty($label)) {
+            return;
+        }
+
+        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
+            $this->_context->set('memory_selection', $this->buildMemorySelectionContext($memoryRecall, $response, $label));
             return;
         }
 
@@ -593,6 +619,7 @@ class SynthetIQ
         $corrected = $this->_context->get('input_corrected');
         $original = $this->_context->get('input_original');
         $memoryRecall = $this->_context->get('memory_recall');
+        $memorySelection = $this->_context->get('memory_selection');
         $predictor = $this->_context->get('response_predictor');
 
         return [
@@ -610,7 +637,12 @@ class SynthetIQ
                 'used' => (bool)$this->_context->get('fallback_used'),
                 'reason' => $this->_context->get('fallback_reason'),
             ],
-            'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'memory' => Arr::merge(
+                Arr::is($memoryRecall) ? $memoryRecall : [],
+                [
+                    'selection' => Arr::is($memorySelection) ? $memorySelection : [],
+                ]
+            ),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,
@@ -625,6 +657,83 @@ class SynthetIQ
         $value = $this->_context->get($key);
 
         return Arr::is($value) ? $value : [];
+    }
+
+    protected function buildMemoryResponseContext(MemoryRecall $recall): array
+    {
+        $items = [];
+
+        foreach ($recall->related() as $label => $entry) {
+            $items[] = $this->normalizeMemoryEntry($label, $entry);
+        }
+
+        return Arr::make($items)->filter(function ($entry): bool {
+            return Val::isNotEmpty($entry);
+        })->toArray();
+    }
+
+    protected function buildMemorySelectionContext(MemoryRecall $recall, string $response, string $label): array
+    {
+        $responseContext = $this->arrayContextValue('memory_response_context');
+        $matches = [];
+
+        foreach ($responseContext as $entry) {
+            if (!Arr::is($entry)) {
+                continue;
+            }
+
+            $entryResponse = (string)($entry['response'] ?? '');
+            $entryIntent = (string)($entry['intent_label'] ?? '');
+            $matchesResponse = Val::isNotEmpty($entryResponse) && $entryResponse === $response;
+            $matchesIntent = Val::isNotEmpty($entryIntent) && $entryIntent === $label;
+
+            if ($matchesResponse || $matchesIntent) {
+                $matches[] = $entry;
+            }
+        }
+
+        return [
+            'selected_response' => $response,
+            'selected_intent' => $label,
+            'related_count' => Arr::count($responseContext),
+            'matched_count' => Arr::count($matches),
+            'matches' => $matches,
+            'intentBiases' => $recall->intentBiases(),
+            'meta' => $recall->meta(),
+        ];
+    }
+
+    protected function normalizeMemoryEntry($label, $entry): array
+    {
+        $context = Arr::is($entry) ? ($entry['context'] ?? null) : null;
+        $record = [
+            'label' => (string)$label,
+            'similarity' => Arr::is($entry) && Arr::hasKey($entry, 'similarity') ? (float)$entry['similarity'] : null,
+        ];
+
+        if ($context instanceof Context) {
+            $record['input'] = $context->get('input');
+            $record['response'] = $context->get('response');
+            $record['intent_label'] = $context->get('intent_label');
+            $record['scope'] = $context->get('scope');
+            $record['user_id'] = $context->get('user_id');
+            $record['session_id'] = $context->get('session_id');
+            $record['timestamp'] = $context->get('timestamp');
+        } elseif (Arr::is($entry)) {
+            $record = Arr::merge($record, [
+                'input' => $entry['input'] ?? null,
+                'response' => $entry['response'] ?? null,
+                'intent_label' => $entry['intent_label'] ?? null,
+                'scope' => $entry['scope'] ?? null,
+                'user_id' => $entry['user_id'] ?? null,
+                'session_id' => $entry['session_id'] ?? null,
+                'timestamp' => $entry['timestamp'] ?? null,
+            ]);
+        }
+
+        return Arr::make($record)->filter(function ($value): bool {
+            return $value !== null && $value !== '';
+        })->toArray();
     }
 
     public function evaluateNode(array $node): int

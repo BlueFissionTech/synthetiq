@@ -66,6 +66,15 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Sample configuration is provided in `sample_configs/`.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.
+- Recalled memory episodes can influence routing through intent biases and can
+  be reported in the response envelope after response selection.
+
+### Memory Response Selection
+
+SynthetIQ normalizes related memory entries into `memory.selection`, including
+matched entries, selected response, selected response intent, recall metadata,
+and bounded counts. Memory storage, scope isolation, and permission guards
+remain adapter concerns.
 
 ## Quality Targets
 

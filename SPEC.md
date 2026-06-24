@@ -46,6 +46,8 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
 - `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
+- `Policy\PolicyFilterInterface`: Allows deterministic input and output policy checks.
+- `Audit\AuditTrail`: Records structured policy decisions, intent scores, fallback triggers, memory recall, and response-selection metadata.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
@@ -66,6 +68,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Sample configuration is provided in `sample_configs/`.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.
+- Policy filters inspect input/output text and can deny or replace unsafe content. Audit records are structured arrays with optional redaction before storage or exposure.
 
 ## Quality Targets
 

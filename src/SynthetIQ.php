@@ -20,6 +20,9 @@ use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
+use BlueFission\SynthetIQ\Audit\AuditTrail;
+use BlueFission\SynthetIQ\Policy\PolicyDecision;
+use BlueFission\SynthetIQ\Policy\PolicyFilterInterface;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Num;
@@ -42,6 +45,8 @@ class SynthetIQ
     protected $_learningModel;
     protected $_memoryAdapter;
     protected $_fallbackResponder;
+    protected $_policyFilters;
+    protected $_auditTrail;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
     protected bool $_spellCorrectionEnabled = true;
@@ -67,6 +72,8 @@ class SynthetIQ
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_policyFilters = [];
+        $this->_auditTrail = new AuditTrail();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
@@ -83,6 +90,31 @@ class SynthetIQ
     public function setFallbackResponder(?FallbackResponderInterface $responder): void
     {
         $this->_fallbackResponder = $responder ?? new NullFallbackResponder();
+    }
+
+    public function addPolicyFilter(PolicyFilterInterface $filter): void
+    {
+        $this->_policyFilters[] = $filter;
+    }
+
+    public function clearPolicyFilters(): void
+    {
+        $this->_policyFilters = [];
+    }
+
+    public function auditTrail(): array
+    {
+        return $this->_auditTrail->records();
+    }
+
+    public function resetAuditTrail(): void
+    {
+        $this->_auditTrail->clear();
+    }
+
+    public function setAuditRedactor(?callable $redactor): void
+    {
+        $this->_auditTrail->setRedactor($redactor);
     }
 
     public function setConfidenceThreshold(?float $threshold): void
@@ -141,6 +173,11 @@ class SynthetIQ
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
+        $inputPolicy = $this->inspectPolicy('input', $input, []);
+        if (!$inputPolicy->allowed()) {
+            return $this->denyTurn($input, $inputPolicy);
+        }
+
         // Run the input through the interpreter, it will produce an output
         $this->_interpreter->run(Str::lower($input));
 
@@ -158,6 +195,11 @@ class SynthetIQ
         $this->_context->set('intent_scores', $turnScores);
         $this->_context->set('selected_intent_scores', $turnScores);
         $this->_context->set('intent_confidence', $confidence);
+        $this->recordAudit('intent.scored', [
+            'input' => $input,
+            'scores' => $turnScores,
+            'confidence' => $confidence,
+        ]);
         Dev::do('synthetiq.intent.scored', [
             'input' => $input,
             'scores' => $scores ? $scores->toArray() : [],
@@ -174,6 +216,7 @@ class SynthetIQ
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, false);
         if ($fallbackResponse !== null) {
             $response = $fallbackResponse;
+            $response = $this->inspectOutputPolicy($response, $intent, $turnScores);
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
             if ($this->_learningModel) {
@@ -243,6 +286,13 @@ class SynthetIQ
             $this->_context->set('selected_intent_label', $intent->getLabel());
             $this->_context->set('selected_intent_scores', $turnScores);
         }
+
+        $response = $this->inspectOutputPolicy($response, $intent, $turnScores);
+        $this->recordAudit('response.selected', [
+            'intent' => $intent ? $intent->getLabel() : null,
+            'response' => $response,
+            'scores' => $turnScores,
+        ]);
 
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
@@ -407,6 +457,9 @@ class SynthetIQ
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
+        $this->_context->set('policy_denied', false);
+        $this->_context->set('policy_reason', null);
+        $this->_context->set('policy_stage', null);
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -468,6 +521,7 @@ class SynthetIQ
         if (Str::is($response) && Val::isNotEmpty($response)) {
             $this->_context->set('fallback_used', true);
             $this->_context->set('fallback_reason', $reason);
+            $this->recordAudit('fallback.triggered', $meta);
             Dev::do('synthetiq.fallback.triggered', $meta);
 
             return $response;
@@ -486,9 +540,68 @@ class SynthetIQ
         $recall = $this->_memoryAdapter->recall($input, $this->_context, $meta);
         if (!$recall->isEmpty()) {
             $this->_context->set('memory_recall', $recall->toArray());
+            $this->recordAudit('memory.recalled', $recall->toArray());
         }
 
         return $recall;
+    }
+
+    protected function inspectPolicy(string $stage, string $text, array $meta): PolicyDecision
+    {
+        foreach ($this->_policyFilters as $filter) {
+            if (!$filter instanceof PolicyFilterInterface) {
+                continue;
+            }
+
+            $decision = $stage === 'input'
+                ? $filter->inspectInput($text, $this->_context, $meta)
+                : $filter->inspectOutput($text, $this->_context, $meta);
+
+            $this->recordAudit("policy.{$stage}.decision", $decision->toArray());
+            if (!$decision->allowed()) {
+                $this->_context->set('policy_denied', true);
+                $this->_context->set('policy_reason', $decision->reason());
+                $this->_context->set('policy_stage', $stage);
+                $this->recordAudit("policy.{$stage}.denied", $decision->toArray());
+
+                return $decision;
+            }
+        }
+
+        return PolicyDecision::allow("{$stage}_allowed");
+    }
+
+    protected function denyTurn(string $input, PolicyDecision $decision): string
+    {
+        $response = $decision->replacement() ?? 'This request cannot be handled by the configured policy.';
+        $intent = new Intent('policy.denied', 'Policy Denied');
+        $this->_context->set('current_intent', $intent);
+        $this->_context->set('selected_intent_label', $intent->getLabel());
+        $this->_context->set('selected_intent_scores', [$intent->getLabel() => 1.0]);
+        $this->_context->set('intent_confidence', 1.0);
+        $this->_history->addEntry($input, $response);
+        $this->_context->set('last_intent', $intent);
+
+        return $response;
+    }
+
+    protected function inspectOutputPolicy(string $response, ?Intent $intent, array $scores): string
+    {
+        $decision = $this->inspectPolicy('output', $response, [
+            'intent' => $intent ? $intent->getLabel() : null,
+            'scores' => $scores,
+        ]);
+
+        if ($decision->allowed()) {
+            return $response;
+        }
+
+        return $decision->replacement() ?? 'This response was blocked by the configured policy.';
+    }
+
+    protected function recordAudit(string $event, array $payload = []): void
+    {
+        $this->_auditTrail->record($event, $payload);
     }
 
     protected function recordMemory(string $input, string $response): void
@@ -610,6 +723,12 @@ class SynthetIQ
                 'used' => (bool)$this->_context->get('fallback_used'),
                 'reason' => $this->_context->get('fallback_reason'),
             ],
+            'policy' => [
+                'denied' => (bool)$this->_context->get('policy_denied'),
+                'reason' => $this->_context->get('policy_reason'),
+                'stage' => $this->_context->get('policy_stage'),
+            ],
+            'audit' => $this->auditTrail(),
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,

@@ -192,6 +192,24 @@ The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
 
+## Policy Filters And Audit
+
+Policy filters can inspect input and output text around the deterministic
+pipeline. Denied input returns a configured replacement response; denied output
+can replace the selected response. Response envelopes include policy status and
+the structured audit trail.
+
+```php
+use BlueFission\SynthetIQ\Policy\NullPolicyFilter;
+
+$ai->addPolicyFilter(new NullPolicyFilter());
+$envelope = $ai->processInputEnvelope('hello');
+$audit = $envelope['audit'];
+```
+
+Use `setAuditRedactor()` to redact audit payloads before they are recorded. See
+`docs/policy-audit.md` for the contract and boundary notes.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

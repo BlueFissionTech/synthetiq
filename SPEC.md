@@ -46,6 +46,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
 - `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
+- `Scenes\SceneContract`: Validates deterministic scene definitions for authored prompts, choices, fallback behavior, voice guidance, public-safety constraints, and handoff metadata.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
@@ -66,6 +67,24 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Sample configuration is provided in `sample_configs/`.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.
+- Conversation scene contracts are array-based definitions with `id`, `voice_policy`, `public_safety`, `states`, optional `handoff` entries, and explicit transition targets.
+
+### Conversation Scene Contract
+
+Scene contracts define deterministic authored experiences without executing a
+runtime engine. A scene contains:
+
+- `voice_policy`: tone, allowed guidance, and avoided behaviors.
+- `public_safety`: constraints plus escalation or handoff rules.
+- `states`: dialogue, decision, and handoff states.
+- `choices`: labelled transitions from one state to another.
+- `fallback`: prompt and optional transition for unsupported input.
+- `handoff`: metadata the host runtime can use for review or intake.
+
+SynthetIQ owns validation and sample scene data. Automata can provide upstream
+orchestration/context surfaces when a runtime executes a scene, and Vibe-authored
+artifacts can generate compatible scene definitions. Hosts own persistence,
+permissions, review workflow, transport, and handoff execution.
 
 ## Quality Targets
 

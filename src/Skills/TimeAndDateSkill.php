@@ -6,6 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
 use BlueFission\Utils\DateTime;
 use BlueFission\Str;
+use BlueFission\Val;
 
 class TimeAndDateSkill extends BaseSkill
 {
@@ -19,7 +20,7 @@ class TimeAndDateSkill extends BaseSkill
     public function execute(Context $context = null)
     {
         $dateTimeUtil = new DateTime();
-        $message = Str::lower($context->get('message'));
+        $message = Str::lower((string)($context ? $context->get('message') : ''));
         $responseParts = [];
 
         if (Str::has($message, 'time')) {
@@ -37,12 +38,19 @@ class TimeAndDateSkill extends BaseSkill
             $responseParts[] = "The time zone is {$timeZone}";
         }
 
-        if (empty($responseParts)) {
+        if (Val::isEmpty($responseParts)) {
             $currentTime = $dateTimeUtil->time(time());
             $responseParts[] = "The current time is {$currentTime}";
         }
 
-        $this->response = implode(', ', $responseParts) . '.';
+        $response = '';
+        foreach ($responseParts as $part) {
+            $response = Val::isEmpty($response)
+                ? (string)$part
+                : Str::make($response)->append(', ')->append((string)$part)->val();
+        }
+
+        $this->response = Str::make($response)->append('.')->val();
     }
 
     public function response(): string

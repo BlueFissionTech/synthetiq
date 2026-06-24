@@ -10,6 +10,7 @@ use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Flow\ConversationFlow;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\SynthetIQ\Tests\Support\FakeAnalyzer;
 use BlueFission\SynthetIQ\Tests\Support\FakeInterpreter;
 use BlueFission\SynthetIQ\Tests\Support\MatcherResetter;
@@ -396,6 +397,48 @@ class SynthetIQTest extends TestCase
         $this->assertSame('choose_topic', $envelope['flow']['current_state']);
         $this->assertSame('flow.recovery.intent', $envelope['flow']['last_transition']['intent']);
         $this->assertTrue((bool)$envelope['flow']['last_transition']['fallback']);
+    public function testConversationStateInfluencesContextAndResponseEnvelope(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'status' => ['status.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setConversationState(
+            ConversationState::fromArray([
+                'persona' => [
+                    'name' => 'Guide',
+                    'role' => 'assistant',
+                    'traits' => ['bounded'],
+                ],
+                'tone' => 'calm',
+                'mood' => 'steady',
+                'task' => [
+                    'state' => 'checking',
+                    'slots' => ['goal' => 'status'],
+                ],
+                'session' => [
+                    'id' => 'session-1',
+                    'user_id' => 'user-1',
+                    'scope' => 'state-test',
+                ],
+            ])
+        );
+
+        $ai->addRoute('status', 'status.intent', ['reply.intent']);
+        $ai->addRoute('Tone: {{context.tone}}', 'reply.intent', []);
+
+        $envelope = $ai->processInputEnvelope('status');
+
+        $this->assertStringContainsString('calm', $envelope['response']);
+        $this->assertSame('calm', $envelope['state']['tone']);
+        $this->assertSame('checking', $envelope['state']['task']['state']);
+        $this->assertSame('status', $envelope['state']['task']['slots']['goal']);
+        $this->assertSame(1, $envelope['state']['turn']['count']);
+        $this->assertSame('status.intent', $envelope['state']['turn']['last_intent']);
+
+        $ai->resetConversationState();
+        $this->assertSame('idle', $ai->conversationState()->toArray()['task']['state']);
     }
 
     private function readProperty(object $object, string $property): mixed

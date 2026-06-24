@@ -21,12 +21,14 @@ use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
 use BlueFission\SynthetIQ\Flow\ConversationFlow;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\DevElation as Dev;
+use Throwable;
 
 class SynthetIQ
 {
@@ -44,6 +46,7 @@ class SynthetIQ
     protected $_memoryAdapter;
     protected $_fallbackResponder;
     protected $_conversationFlow;
+    protected $_conversationState;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
     protected bool $_spellCorrectionEnabled = true;
@@ -70,11 +73,13 @@ class SynthetIQ
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
         $this->_conversationFlow = null;
+        $this->_conversationState = new ConversationState();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
 
+        $this->applyConversationState();
         $this->refreshResponseSelector();
     }
 
@@ -121,6 +126,21 @@ class SynthetIQ
             $this->_conversationFlow->complete();
             $this->recordConversationFlowDiagnostics();
         }
+    public function conversationState(): ConversationState
+    {
+        return $this->_conversationState;
+    }
+
+    public function setConversationState(?ConversationState $state): void
+    {
+        $this->_conversationState = $state ?? new ConversationState();
+        $this->applyConversationState();
+    }
+
+    public function resetConversationState(): void
+    {
+        $this->_conversationState->reset();
+        $this->applyConversationState();
     }
 
     public function setConfidenceThreshold(?float $threshold): void
@@ -176,11 +196,19 @@ class SynthetIQ
     {
         $rawInput = $input;
         $this->resetTurnDiagnostics($rawInput);
+        $this->applyConversationState();
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
-        // Run the input through the interpreter, it will produce an output
-        $this->_interpreter->run(Str::lower($input));
+        // Run the input through the interpreter when it accepts the phrase.
+        try {
+            $this->_interpreter->run(Str::lower($input));
+        } catch (Throwable $e) {
+            Dev::do('synthetiq.interpreter.run_failed', [
+                'input' => $input,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $memoryRecall = $this->recallMemory($input);
 
@@ -216,6 +244,7 @@ class SynthetIQ
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
             $this->advanceConversationFlow($intent);
+            $this->recordConversationStateTurn($intent, $response);
             if ($this->_learningModel) {
                 $this->_learningModel->observe($input, $response, $this->_context);
             }
@@ -287,6 +316,7 @@ class SynthetIQ
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
         $this->advanceConversationFlow($intent);
+        $this->recordConversationStateTurn($intent, $response);
         if ($this->_learningModel) {
             $this->_learningModel->observe($input, $response, $this->_context);
         }
@@ -449,6 +479,17 @@ class SynthetIQ
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
         $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function applyConversationState(): void
+    {
+        $this->_conversationState->applyToContext($this->_context);
+    }
+
+    protected function recordConversationStateTurn(?Intent $intent, string $response): void
+    {
+        $this->_conversationState->captureTurn($intent, $response);
+        $this->applyConversationState();
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -684,6 +725,7 @@ class SynthetIQ
             ],
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
             'flow' => $this->arrayContextValue('conversation_flow'),
+            'state' => $this->_conversationState->toArray(),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,
@@ -716,14 +758,24 @@ class SynthetIQ
             $score += 3;
         }
 
-        // Run in interpreter to see if it's valid
-        if ( $this->_interpreter->isValid($node['response']) ) {
+        // Run in interpreter to see if it's valid.
+        try {
+            $interpreterValid = $this->_interpreter->isValid($node['response']);
+        } catch (Throwable $e) {
+            $interpreterValid = false;
+        }
+
+        if ( $interpreterValid ) {
             // echo "-- Interpreter match\n";
             $score += 2;
 
             if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
-                $tokens = $this->_interpreter->tokenize($node['response']);
-                $output = $this->_interpreter->parse($tokens);
+                try {
+                    $tokens = $this->_interpreter->tokenize($node['response']);
+                    $output = $this->_interpreter->parse($tokens);
+                } catch (Throwable $e) {
+                    $output = [];
+                }
             }
 
             // var_dump($output);

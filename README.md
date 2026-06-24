@@ -71,6 +71,7 @@ See `example.php` for a CLI and browser demo.
 - `examples/evaluator.php` runs a lightweight intent accuracy report from `sample_configs/eval_cases.php`.
 - `examples/route_state.php` compiles, saves, loads, and applies cached route state.
 - `examples/jenss/` contains optional JenSS stress fixtures for declarative route catalogs and feedback gates.
+- `sample_configs/conversation_scenes.php` contains deterministic scene contract examples.
 
 ## Client Configuration
 
@@ -191,6 +192,23 @@ $predictor = $result['predictor']['status'];
 The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
+
+## Conversation Scene Contracts
+
+`BlueFission\SynthetIQ\Scenes\SceneContract` validates deterministic scene
+definitions for authored conversation paths. Scene definitions include states,
+dialogue prompts, choices, fallback prompts, voice policy, public-safety
+constraints, and handoff metadata.
+
+```php
+use BlueFission\SynthetIQ\Scenes\SceneContract;
+
+$scenes = require 'sample_configs/conversation_scenes.php';
+$errors = SceneContract::validate($scenes['proof_walkthrough']);
+```
+
+See `docs/conversation-scenes.md` for the full contract shape and package
+boundaries.
 
 ## Notes and Constraints
 

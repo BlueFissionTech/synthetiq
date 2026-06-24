@@ -32,11 +32,13 @@ composer install
 
 ```php
 use BlueFission\SynthetIQ\SynthetIQ;
+use BlueFission\SynthetIQ\Training\RouteTrainer;
 use BlueFission\Automata\Language\{Interpreter, Grammar, StemmerLemmatizer, Documenter, Walker};
 use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
 
 $dialogue = require 'sample_configs/dialogue.php';
+$intentBoosts = require 'sample_configs/intent_boosts.php';
 $grammar = require 'sample_configs/grammar.php';
 $tokens = require 'sample_configs/tokens.php';
 $documenter = require 'sample_configs/documenter.php';
@@ -51,31 +53,60 @@ $analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, 'models/m
 
 $ai = new SynthetIQ($interpreter, $analyzer);
 
-foreach ($dialogue as $category => $info) {
-    foreach ($info[1] as $statement) {
-        $ai->addRoute($statement, $category, $info[0]);
-    }
-}
+RouteTrainer::train($ai, $dialogue, $intentBoosts);
 
-echo $ai->processInput('hello');
+$result = $ai->processInputEnvelope('hello');
+echo $result['response'];
 ```
 
 See `example.php` for a CLI and browser demo.
 
 ## Examples
 
-- `examples/cli.php` runs a CLI-only loop with the sample configs.
-- `examples/minimal.php` shows a small routing setup for quick experiments.
+- `examples/support.php` provides the shared sample bootstrap used by the examples.
+- `example.php` runs a small browser and CLI demo that returns response envelopes.
+- `examples/cli.php` runs a CLI-only loop with the sample configs and current route trainer.
+- `examples/minimal.php` shows a small custom routing setup for quick experiments.
 - `examples/batch.php` runs a fixed number of inputs from `sample_configs/statements.php`.
-- `examples/sequence.php` runs three batches of 15 inputs each, then exits.
-- `examples/evaluator.php` runs a lightweight intent accuracy report from `sample_configs/eval_cases.php`.
-- `examples/route_state.php` compiles, saves, loads, and applies cached route state.
+- `examples/sequence.php` runs curated multi-turn batches and reports selected intents.
+- `examples/envelope.php` prints the structured response envelope, fallback state, correction metadata, and predictor diagnostics.
+- `examples/evaluator.php` runs an intent accuracy report through the current envelope API.
+- `examples/route_state.php` compiles, saves, loads, verifies, and applies cached route state.
 - `examples/jenss/` contains optional JenSS stress fixtures for declarative route catalogs and feedback gates.
+- `sample_configs/conversation_scenes.php` contains deterministic scene contract examples.
+
+Useful smoke commands:
+
+```bash
+php example.php hello
+php examples/minimal.php hello
+php examples/envelope.php hello
+php examples/evaluator.php --no-progress
+php examples/route_state.php --write --state=models/routes/synthetiq_routes.json --apply --probe=hello
+php benchmarks/selection.php 1000 50 5
+```
 
 ## Client Configuration
 
 Third-party clients for news/weather/location are configured in `sample_configs/clients.php`.
 These rely on the Composer package `bluefission/simpleclients`.
+External weather and news clients are disabled by default in the sample config so clean installs do not require credentials or app globals.
+
+Use `BlueFission\SynthetIQ\Clients\ClientResolver` to wire optional clients explicitly:
+
+```php
+use BlueFission\SynthetIQ\Clients\ClientResolver;
+use BlueFission\SynthetIQ\Clients\WeatherClientInterface;
+
+$resolver = ClientResolver::make(require 'sample_configs/clients.php');
+$weatherClient = $resolver->client(WeatherClientInterface::class);
+```
+
+The sample config includes null clients for clean installs and lists the SimpleClients bindings that can be enabled by changing the `enabled` and `bindings` entries. A local fake-client example is available:
+
+```bash
+php examples/optional_clients.php
+```
 
 ## Core Components
 
@@ -88,6 +119,17 @@ These rely on the Composer package `bluefission/simpleclients`.
 - `BlueFission\SynthetIQ\Skills\*`: optional Automata skills for common responses.
 - `BlueFission\SynthetIQ\Memory\*`: pluggable short-term memory adapters.
 - `BlueFission\SynthetIQ\Fallback\*`: low-confidence fallback responders.
+
+## Memory Recall
+
+Memory adapters can bias intent routing and provide response-selection context.
+`processInputEnvelope()` includes recalled entries and a `memory.selection`
+summary showing which recalled episodes matched the selected response or
+response intent. Scope, permission checks, retrieval limits, and similarity
+thresholds remain adapter-owned.
+
+See `docs/memory-response-selection.md` for the envelope fields and adapter
+responsibilities.
 
 ## Routing and Templates
 
@@ -201,6 +243,87 @@ $predictor = $result['predictor']['status'];
 The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
+
+## Scripted Template Blocks
+
+Response templates support opt-in `{=...}` blocks for bounded dynamic values.
+The renderer resolves `input`, `intent`, and `context.*` paths plus the safe
+transforms `upper`, `lower`, `trim`, and `capitalize`. It does not execute
+arbitrary PHP or external scripts.
+
+```php
+$ai->enableScriptedTemplates(true);
+```
+
+When disabled, scripted blocks remain literal text. See
+`docs/scripted-templates.md` and `sample_configs/scripted_templates.php`.
+## Policy Filters And Audit
+
+Policy filters can inspect input and output text around the deterministic
+pipeline. Denied input returns a configured replacement response; denied output
+can replace the selected response. Response envelopes include policy status and
+the structured audit trail.
+
+```php
+use BlueFission\SynthetIQ\Policy\NullPolicyFilter;
+
+$ai->addPolicyFilter(new NullPolicyFilter());
+$envelope = $ai->processInputEnvelope('hello');
+$audit = $envelope['audit'];
+```
+
+Use `setAuditRedactor()` to redact audit payloads before they are recorded. See
+`docs/policy-audit.md` for the contract and boundary notes.
+## Conversation Flow Graphs
+
+`BlueFission\SynthetIQ\Flow\ConversationFlow` defines explicit multi-turn
+states, allowed intents, transitions, fallback intents, and completion state.
+Attach a flow to constrain routing while a task is active:
+
+```php
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
+
+$flow = ConversationFlow::fromArray(require 'sample_configs/conversation_flow.php');
+$ai->setConversationFlow($flow);
+
+$envelope = $ai->processInputEnvelope('ship');
+$current = $envelope['flow']['current_state'];
+```
+
+Flows can be reset, completed, or abandoned through `SynthetIQ` methods.
+## Conversation State
+
+`BlueFission\SynthetIQ\State\ConversationState` stores persona, mood, tone,
+task slots, session metadata, and turn summaries. `SynthetIQ` applies this state
+to the Automata context before each turn so routing, memory metadata, and
+response templates can read it without app globals:
+
+```php
+use BlueFission\SynthetIQ\State\ConversationState;
+
+$state = ConversationState::fromArray(require 'sample_configs/conversation_state.php');
+$ai->setConversationState($state);
+
+$envelope = $ai->processInputEnvelope('status');
+$tone = $envelope['state']['tone'];
+```
+
+## Conversation Scene Contracts
+
+`BlueFission\SynthetIQ\Scenes\SceneContract` validates deterministic scene
+definitions for authored conversation paths. Scene definitions include states,
+dialogue prompts, choices, fallback prompts, voice policy, public-safety
+constraints, and handoff metadata.
+
+```php
+use BlueFission\SynthetIQ\Scenes\SceneContract;
+
+$scenes = require 'sample_configs/conversation_scenes.php';
+$errors = SceneContract::validate($scenes['proof_walkthrough']);
+```
+
+See `docs/conversation-scenes.md` for the full contract shape and package
+boundaries.
 
 ## Notes and Constraints
 

@@ -574,6 +574,7 @@ class SynthetIQ
         $this->_context->set('input_corrected', null);
         $this->_context->set('fallback_used', false);
         $this->_context->set('fallback_reason', null);
+        $this->_context->set('fallback_candidate', null);
         $this->_context->set('memory_recall', []);
         $this->_context->set('memory_response_context', []);
         $this->_context->set('memory_selection', []);
@@ -875,6 +876,7 @@ class SynthetIQ
         $memoryRecall = $this->_context->get('memory_recall');
         $memorySelection = $this->_context->get('memory_selection');
         $predictor = $this->_context->get('response_predictor');
+        $fallbackCandidate = $this->_context->get('fallback_candidate');
 
         return [
             'response' => $response,
@@ -890,6 +892,7 @@ class SynthetIQ
             'fallback' => [
                 'used' => (bool)$this->_context->get('fallback_used'),
                 'reason' => $this->_context->get('fallback_reason'),
+                'candidate' => Arr::is($fallbackCandidate) ? $fallbackCandidate : null,
             ],
             'memory' => Arr::merge(
                 Arr::is($memoryRecall) ? $memoryRecall : [],

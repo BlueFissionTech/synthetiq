@@ -48,6 +48,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
 - `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
+- `Fallback\LocalModelFallbackResponder`: Optional provider-backed fallback with captured training candidates.
 - `Policy\PolicyFilterInterface`: Allows deterministic input and output policy checks.
 - `Audit\AuditTrail`: Records structured policy decisions, intent scores, fallback triggers, memory recall, and response-selection metadata.
 - `Scenes\SceneContract`: Validates deterministic scene definitions for authored prompts, choices, fallback behavior, voice guidance, public-safety constraints, and handoff metadata.
@@ -108,6 +109,8 @@ permissions, review workflow, transport, and handoff execution.
 - Reliability: consistent output given the same inputs and context.
 - Speed: fast classification and selection for interactive chat.
 - Low cost: avoid heavy compute or external dependencies in the core path.
+- Fallback model execution stays optional and host-supplied; SynthetIQ owns the
+  candidate capture and review contract.
 
 ## Risks and Constraints
 

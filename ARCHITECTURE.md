@@ -31,6 +31,8 @@ Automata and Develation for language, memory, and orchestration primitives.
 6. **Diagnostics and fallback**
    - `FallbackResponderInterface` handles configured unknown or low-confidence
      fallback paths.
+   - `LocalModelFallbackResponder` can call a host-provided provider and capture
+     reviewable training candidates.
    - Response envelopes expose intent, score, fallback, memory, correction, and
      predictor diagnostics.
    - Policy filters can deny input/output content, and the audit trail records
@@ -91,8 +93,9 @@ and large-scale retrieval pipelines. SynthetIQ currently lacks:
   - context-aware transitions,
   - task/domain specific strategies.
 - Confidence scoring with escalation:
-  - If confidence falls below threshold, route to a mini quantized LLM.
-  - Capture LLM answers as training candidates (guarded).
+  - If confidence falls below threshold, route to an optional local model
+    provider.
+  - Capture fallback answers as reviewable training candidates.
 
 ### Short-Term Memory and Context
 
@@ -126,8 +129,8 @@ and large-scale retrieval pipelines. SynthetIQ currently lacks:
 
 ## Wise Integration
 
-Wise should route unknown or low-confidence intents to a mini, quantized LLM,
-while storing approved results as new training data. The router must:
+Hosts can route unknown or low-confidence intents to an optional local model
+provider while storing approved results as new training data. The router must:
 
 - enforce confidence thresholds,
 - apply safety and policy filters,

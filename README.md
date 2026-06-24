@@ -216,6 +216,16 @@ Use `setResponsePredictor(null)` to disable predictor-assisted selection while
 keeping template selection compatible. Custom predictors can expose
 `predictNextWords`, `predictNextWord`, or `predictBeginning`.
 
+## Local Model Fallback
+
+`LocalModelFallbackResponder` provides an opt-in adapter contract for unknown
+or low-confidence turns. Hosts provide a `FallbackProviderInterface`; SynthetIQ
+captures prompts, responses, fallback reasons, confidence, selected intent
+metadata, and candidate review status through `TrainingCandidateStore`.
+
+The default fallback remains disabled unless explicitly configured. See
+`docs/llm-fallback-training.md` and `sample_configs/fallback_training.php`.
+
 ## Response Envelope
 
 `processInput(string)` still returns the selected response string. Use

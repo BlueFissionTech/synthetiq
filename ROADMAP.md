@@ -32,7 +32,7 @@ Status legend: Implemented, Partial, Not implemented.
 
 - Offline model training + cached inference bundles. (Partial)
 - Multi-strategy benchmarking via Automata `BenchmarkService`. (Partial)
-- LLM fallback (quantized) for unknown intents. (Partial)
+- LLM fallback adapter and training candidate workflow. (Implemented)
 - Safety and policy filters with audit logs. (Not implemented)
 - Load testing and latency/throughput budgets. (Partial)
 
@@ -50,7 +50,7 @@ Status legend: Implemented, Partial, Not implemented.
 | Short-term memory | Holoscene + ABS memory with response-selection context | Partial |
 | Context routing | Intent weighting by history | Partial |
 | Strategy ensemble | Matcher, keyword overlap, and optional Naive Bayes scoring | Partial |
-| LLM fallback | Mini quantized LLM for unknown intent | Partial |
+| LLM fallback | Optional provider adapter with captured training candidates | Implemented |
 | Safety filters | Policy gating and logging | Not implemented |
 | Route state lifecycle | Compile, save, validate, and apply cached route catalogs | Partial |
 | Predictor diagnostics | Response predictor status and fallback metadata | Implemented |

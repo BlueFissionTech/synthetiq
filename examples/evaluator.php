@@ -1,45 +1,53 @@
 <?php
 
-use BlueFission\SynthetIQ\SynthetIQ;
-use BlueFission\SynthetIQ\Intents\Classifier;
-use BlueFission\SynthetIQ\Training\RouteTrainer;
+declare(strict_types=1);
+
+use BlueFission\Arr;
+use BlueFission\Automata\Context;
+use BlueFission\Automata\Intent\Intent;
+use BlueFission\Automata\Language\ContractionNormalizer;
 use BlueFission\Cli\Args;
 use BlueFission\Cli\Args\OptionDefinition;
-use BlueFission\Cli\Util\ProgressBar;
-use BlueFission\Automata\Context;
-use BlueFission\Automata\Language\{
-    Interpreter,
-    Grammar,
-    StemmerLemmatizer,
-    Documenter,
-    Walker
-};
-use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
-use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
-use BlueFission\Automata\Language\ContractionNormalizer;
-use BlueFission\Arr;
-use BlueFission\Func;
 use BlueFission\Num;
+use BlueFission\Str;
+use BlueFission\SynthetIQ\Evaluation\IntentEvaluator;
+use BlueFission\SynthetIQ\Intents\IClassifier;
+use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\Val;
 
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../sample_configs/skills.php';
+require __DIR__ . '/support.php';
 
-$dialogue = require __DIR__ . '/../sample_configs/dialogue.php';
-$intentBoosts = require __DIR__ . '/../sample_configs/intent_boosts.php';
-$grammar = require __DIR__ . '/../sample_configs/grammar.php';
-$tokens = require __DIR__ . '/../sample_configs/tokens.php';
-$documenter = require __DIR__ . '/../sample_configs/documenter.php';
-$cases = require __DIR__ . '/../sample_configs/eval_cases.php';
-
-function parseOptions(array $argv, array $defaults): array
-{
-    $options = $defaults;
-    if (!class_exists(Args::class) || !class_exists(OptionDefinition::class)) {
-        if (Val::is($argv[1] ?? null)) {
-            $options['top'] = (int)$argv[1];
+if (!class_exists(SynthetIQEnvelopeClassifier::class)) {
+    final class SynthetIQEnvelopeClassifier implements IClassifier
+    {
+        public function __construct(private SynthetIQ $ai)
+        {
         }
-        return $options;
+
+        public function classify(string $input, Context $context): ?Intent
+        {
+            $envelope = $this->ai->processInputEnvelope($input);
+            $label = (string)($envelope['intent']['label'] ?? '');
+
+            return Val::isEmpty($label) ? null : new Intent($label, $label);
+        }
+    }
+}
+
+function synthetiq_evaluator_options(array $argv): array
+{
+    $defaults = [
+        'top' => 3,
+        'train' => true,
+        'progress' => true,
+    ];
+
+    if (!class_exists(Args::class) || !class_exists(OptionDefinition::class)) {
+        if (Val::is($argv[1] ?? null) && Num::is($argv[1])) {
+            $defaults['top'] = (int)$argv[1];
+        }
+
+        return $defaults;
     }
 
     $parser = new Args(['allowUnknown' => true, 'autoHelp' => true]);
@@ -50,13 +58,6 @@ function parseOptions(array $argv, array $defaults): array
             'default' => $defaults['top'],
             'description' => 'Number of top confusion entries to show.',
         ]),
-        new OptionDefinition('model-dir', [
-            'short' => ['m'],
-            'type' => 'string',
-            'default' => $defaults['model-dir'],
-            'description' => 'Model cache directory.',
-            'aliases' => ['model_dir'],
-        ]),
         new OptionDefinition('train', [
             'short' => ['t'],
             'type' => 'bool',
@@ -66,140 +67,54 @@ function parseOptions(array $argv, array $defaults): array
         new OptionDefinition('progress', [
             'type' => 'bool',
             'default' => $defaults['progress'],
-            'description' => 'Show training progress output.',
+            'description' => 'Show route training progress output.',
         ]),
     ]);
 
     $parser->parse($argv);
     $parsed = $parser->options();
     if (Val::isNotEmpty($parsed['help'] ?? null)) {
-        $command = $argv[0] ?? 'evaluator.php';
-        echo $parser->usage($command) . PHP_EOL;
+        echo $parser->usage((string)($argv[0] ?? 'evaluator.php')) . PHP_EOL;
         exit(0);
     }
 
-    return array_merge($options, $parsed);
+    return Arr::merge($defaults, $parsed);
 }
 
-function buildProgressReporter(int $total, bool $enabled): callable
+function synthetiq_evaluator_line(array $counts, int $limit): string
 {
-    if (!$enabled) {
-        return function (): void {
-        };
+    arsort($counts);
+    $labels = Arr::slice(Arr::keys($counts), 0, (int)Num::max(1, $limit));
+    $line = '';
+
+    foreach ($labels as $label) {
+        $segment = "{$label}={$counts[$label]}";
+        $line = Val::isEmpty($line)
+            ? $segment
+            : Str::make($line)->append(', ')->append($segment)->val();
     }
 
-    if (class_exists(ProgressBar::class)) {
-        $bar = new ProgressBar($total);
-        return function (int $current) use ($bar, $total): void {
-            $line = $bar->render($current);
-            echo "\r" . $line;
-            if ($current >= $total) {
-                echo PHP_EOL;
-            }
-        };
-    }
-
-    return function (int $current) use ($total): void {
-        if ($current % 50 === 0 || $current >= $total) {
-            $percent = (int)round(($current / $total) * 100);
-            echo "\rTraining: {$current}/{$total} ({$percent}%)";
-            if (Func::isCallable('flush')) {
-                flush();
-            }
-            if ($current >= $total) {
-                echo PHP_EOL;
-            }
-        }
-    };
+    return $line;
 }
 
-$defaults = [
-    'model-dir' => __DIR__ . '/../models/ml/',
-    'train' => true,
-    'progress' => true,
-    'top' => 3,
-];
-$options = parseOptions($_SERVER['argv'] ?? $argv ?? [], $defaults);
+$options = synthetiq_evaluator_options($_SERVER['argv'] ?? $argv ?? []);
+$runtime = synthetiq_example_build([
+    'train' => (bool)($options['train'] ?? true),
+    'progress' => (bool)($options['progress'] ?? true),
+]);
 
-$modelDir = $options['model-dir'] ?? $defaults['model-dir'];
-if (!is_dir($modelDir)) {
-    mkdir($modelDir, 0777, true);
-}
+$cases = require synthetiq_example_path('sample_configs/eval_cases.php');
+$evaluator = new IntentEvaluator(static fn(string $input): string => ContractionNormalizer::normalize($input));
+$result = $evaluator->evaluate(new SynthetIQEnvelopeClassifier($runtime['ai']), $cases);
+$accuracy = (float)$result['accuracy'] * 100;
+$accuracyText = (string)Num::make($accuracy)->precision(2);
 
-$interpreter = new Interpreter(
-    new Grammar(
-        new StemmerLemmatizer(),
-        $grammar['rules'],
-        $grammar['commands'],
-        $tokens
-    ),
-    $documenter,
-    new Walker()
-);
+echo 'Cases: ' . (string)$result['total'] . "\n";
+echo 'Correct: ' . (string)$result['correct'] . "\n";
+echo "Accuracy: {$accuracyText}%\n\n";
 
-$analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
-$routerOptions = [
-    'naive_bayes' => [
-        'cache_dir' => $modelDir,
-        'cache_key' => RouteTrainer::cacheKey($dialogue, $intentBoosts, [
-            'grammar' => $grammar,
-            'tokens' => $tokens,
-        ]),
-    ],
-];
-$ai = new SynthetIQ($interpreter, $analyzer, null, null, null, null, $routerOptions);
-$classifier = new Classifier($analyzer);
-
-if ($options['train']) {
-    $reporter = buildProgressReporter(RouteTrainer::countRouteStatements($dialogue), (bool)$options['progress']);
-    RouteTrainer::train($ai, $dialogue, $intentBoosts, static function (array $event) use ($reporter): void {
-        if (($event['stage'] ?? null) === RouteTrainer::STAGE_ROUTE) {
-            $reporter((int)$event['current']);
-        }
-    });
-}
-
-$total = Arr::count($cases);
-$correct = 0;
-$confusion = [];
-
-foreach ($cases as $case) {
-    $context = new Context();
-    $input = ContractionNormalizer::normalize($case['input']);
-    $expected = $case['intent'];
-
-    $intent = $classifier->classify($input, $context);
-    $predicted = $intent ? $intent->getLabel() : 'unknown.intent';
-
-    if (!isset($confusion[$expected])) {
-        $confusion[$expected] = [];
-    }
-    $confusion[$expected][$predicted] = ($confusion[$expected][$predicted] ?? 0) + 1;
-
-    if ($predicted === $expected) {
-        $correct++;
-    }
-}
-
-$accuracy = $total > 0 ? ($correct / $total) * 100 : 0;
-
-echo "Cases: {$total}\n";
-echo "Correct: {$correct}\n";
-echo "Accuracy: " . number_format($accuracy, 2) . "%\n\n";
-
+$confusion = Arr::is($result['confusion'] ?? null) ? $result['confusion'] : [];
 foreach ($confusion as $expected => $predictions) {
-    arsort($predictions);
-    $topCount = (int)Num::max(1, (int)($options['top'] ?? 3));
-    $topLabels = Arr::slice(Arr::keys($predictions), 0, $topCount);
-    $top = [];
-    foreach ($topLabels as $label) {
-        $top[$label] = $predictions[$label];
-    }
-    $summary = [];
-    foreach ($top as $label => $count) {
-        $summary[] = "{$label}={$count}";
-    }
-    echo "{$expected}: " . implode(', ', $summary) . "\n";
+    $predictions = Arr::is($predictions) ? $predictions : [];
+    echo "{$expected}: " . synthetiq_evaluator_line($predictions, (int)($options['top'] ?? 3)) . "\n";
 }
-
-exit;

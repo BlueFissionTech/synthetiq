@@ -7,8 +7,10 @@ use BlueFission\Collections\Collection;
 use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\SynthetIQ\ConversationHistory;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
 use BlueFission\SynthetIQ\Memory\MemoryAdapterInterface;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\SynthetIQ\Tests\Support\FakeAnalyzer;
 use BlueFission\SynthetIQ\Tests\Support\FakeInterpreter;
 use BlueFission\SynthetIQ\Tests\Support\MatcherResetter;
@@ -331,6 +333,112 @@ class SynthetIQTest extends TestCase
         $this->assertSame('hellp', $envelope['correction']['original']);
         $this->assertSame('hello', $envelope['correction']['corrected']);
         $this->assertSame('hello', $envelope['input']['normalized']);
+    }
+
+    public function testConversationFlowConstrainsRoutingAndAdvancesState(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'ship' => [
+                'general.intent' => 1.0,
+                'shipping.intent' => 0.3,
+            ],
+            'confirm' => [
+                'confirm.intent' => 1.0,
+            ],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setConversationFlow(ConversationFlow::fromArray(require dirname(__DIR__) . '/sample_configs/conversation_flow.php'));
+
+        $ai->addRoute('ship', 'shipping.intent', ['shipping.reply']);
+        $ai->addRoute('Shipping selected.', 'shipping.reply', []);
+        $ai->addRoute('confirm', 'confirm.intent', ['confirm.reply']);
+        $ai->addRoute('Confirmed.', 'confirm.reply', []);
+
+        $first = $ai->processInputEnvelope('ship');
+
+        $this->assertSame('Shipping selected.', $first['response']);
+        $this->assertSame('shipping.reply', $first['intent']['label']);
+        $this->assertSame('shipping_details', $first['flow']['current_state']);
+        $this->assertSame('active', $first['flow']['status']);
+        $this->assertSame('shipping.intent', $first['flow']['last_transition']['intent']);
+
+        $second = $ai->processInputEnvelope('confirm');
+
+        $this->assertSame('Confirmed.', $second['response']);
+        $this->assertSame('complete', $second['flow']['current_state']);
+        $this->assertSame('complete', $second['flow']['status']);
+
+        $ai->resetConversationFlow();
+        $this->assertSame('choose_topic', $ai->conversationFlow()->currentStateId());
+
+        $ai->abandonConversationFlow();
+        $this->assertTrue($ai->conversationFlow()->isAbandoned());
+    }
+
+    public function testConversationFlowUsesRecoveryIntentWhenInputFallsOutsideActiveState(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'unknown' => [
+                'general.intent' => 1.0,
+            ],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setConversationFlow(ConversationFlow::fromArray(require dirname(__DIR__) . '/sample_configs/conversation_flow.php'));
+
+        $ai->addRoute('recover', 'flow.recovery.intent', ['recovery.reply']);
+        $ai->addRoute('Please choose shipping or account.', 'recovery.reply', []);
+
+        $envelope = $ai->processInputEnvelope('unknown');
+
+        $this->assertSame('Please choose shipping or account.', $envelope['response']);
+        $this->assertSame('recovery.reply', $envelope['intent']['label']);
+        $this->assertSame('choose_topic', $envelope['flow']['current_state']);
+        $this->assertSame('flow.recovery.intent', $envelope['flow']['last_transition']['intent']);
+        $this->assertTrue((bool)$envelope['flow']['last_transition']['fallback']);
+    public function testConversationStateInfluencesContextAndResponseEnvelope(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'status' => ['status.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->setConversationState(
+            ConversationState::fromArray([
+                'persona' => [
+                    'name' => 'Guide',
+                    'role' => 'assistant',
+                    'traits' => ['bounded'],
+                ],
+                'tone' => 'calm',
+                'mood' => 'steady',
+                'task' => [
+                    'state' => 'checking',
+                    'slots' => ['goal' => 'status'],
+                ],
+                'session' => [
+                    'id' => 'session-1',
+                    'user_id' => 'user-1',
+                    'scope' => 'state-test',
+                ],
+            ])
+        );
+
+        $ai->addRoute('status', 'status.intent', ['reply.intent']);
+        $ai->addRoute('Tone: {{context.tone}}', 'reply.intent', []);
+
+        $envelope = $ai->processInputEnvelope('status');
+
+        $this->assertStringContainsString('calm', $envelope['response']);
+        $this->assertSame('calm', $envelope['state']['tone']);
+        $this->assertSame('checking', $envelope['state']['task']['state']);
+        $this->assertSame('status', $envelope['state']['task']['slots']['goal']);
+        $this->assertSame(1, $envelope['state']['turn']['count']);
+        $this->assertSame('status.intent', $envelope['state']['turn']['last_intent']);
+
+        $ai->resetConversationState();
+        $this->assertSame('idle', $ai->conversationState()->toArray()['task']['state']);
     }
 
     private function readProperty(object $object, string $property): mixed

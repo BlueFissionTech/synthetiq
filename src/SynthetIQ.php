@@ -23,12 +23,15 @@ use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
 use BlueFission\SynthetIQ\Audit\AuditTrail;
 use BlueFission\SynthetIQ\Policy\PolicyDecision;
 use BlueFission\SynthetIQ\Policy\PolicyFilterInterface;
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\DevElation as Dev;
+use Throwable;
 
 class SynthetIQ
 {
@@ -47,6 +50,8 @@ class SynthetIQ
     protected $_fallbackResponder;
     protected $_policyFilters;
     protected $_auditTrail;
+    protected $_conversationFlow;
+    protected $_conversationState;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
     protected bool $_spellCorrectionEnabled = true;
@@ -74,11 +79,14 @@ class SynthetIQ
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
         $this->_policyFilters = [];
         $this->_auditTrail = new AuditTrail();
+        $this->_conversationFlow = null;
+        $this->_conversationState = new ConversationState();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
 
+        $this->applyConversationState();
         $this->refreshResponseSelector();
     }
 
@@ -115,6 +123,54 @@ class SynthetIQ
     public function setAuditRedactor(?callable $redactor): void
     {
         $this->_auditTrail->setRedactor($redactor);
+    public function setConversationFlow(?ConversationFlow $flow): void
+    {
+        $this->_conversationFlow = $flow;
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    public function conversationFlow(): ?ConversationFlow
+    {
+        return $this->_conversationFlow;
+    }
+
+    public function resetConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->reset();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function abandonConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->abandon();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function completeConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->complete();
+            $this->recordConversationFlowDiagnostics();
+        }
+    public function conversationState(): ConversationState
+    {
+        return $this->_conversationState;
+    }
+
+    public function setConversationState(?ConversationState $state): void
+    {
+        $this->_conversationState = $state ?? new ConversationState();
+        $this->applyConversationState();
+    }
+
+    public function resetConversationState(): void
+    {
+        $this->_conversationState->reset();
+        $this->applyConversationState();
     }
 
     public function setConfidenceThreshold(?float $threshold): void
@@ -170,6 +226,7 @@ class SynthetIQ
     {
         $rawInput = $input;
         $this->resetTurnDiagnostics($rawInput);
+        $this->applyConversationState();
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
@@ -180,6 +237,15 @@ class SynthetIQ
 
         // Run the input through the interpreter, it will produce an output
         $this->_interpreter->run(Str::lower($input));
+        // Run the input through the interpreter when it accepts the phrase.
+        try {
+            $this->_interpreter->run(Str::lower($input));
+        } catch (Throwable $e) {
+            Dev::do('synthetiq.interpreter.run_failed', [
+                'input' => $input,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $memoryRecall = $this->recallMemory($input);
 
@@ -187,6 +253,7 @@ class SynthetIQ
         if ($memoryRecall) {
             $scores = $this->applyIntentBiases($scores, $memoryRecall->intentBiases());
         }
+        $scores = $this->applyConversationFlow($scores);
 
         $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
         $confidence = $this->computeConfidence($scores);
@@ -219,6 +286,8 @@ class SynthetIQ
             $response = $this->inspectOutputPolicy($response, $intent, $turnScores);
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
+            $this->advanceConversationFlow($intent);
+            $this->recordConversationStateTurn($intent, $response);
             if ($this->_learningModel) {
                 $this->_learningModel->observe($input, $response, $this->_context);
             }
@@ -296,6 +365,8 @@ class SynthetIQ
 
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
+        $this->advanceConversationFlow($intent);
+        $this->recordConversationStateTurn($intent, $response);
         if ($this->_learningModel) {
             $this->_learningModel->observe($input, $response, $this->_context);
         }
@@ -460,6 +531,18 @@ class SynthetIQ
         $this->_context->set('policy_denied', false);
         $this->_context->set('policy_reason', null);
         $this->_context->set('policy_stage', null);
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function applyConversationState(): void
+    {
+        $this->_conversationState->applyToContext($this->_context);
+    }
+
+    protected function recordConversationStateTurn(?Intent $intent, string $response): void
+    {
+        $this->_conversationState->captureTurn($intent, $response);
+        $this->applyConversationState();
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -474,6 +557,36 @@ class SynthetIQ
         }
 
         $this->_spellCorrector->addText((string)$terms);
+    }
+
+    protected function applyConversationFlow(?Arr $scores): ?Arr
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return $scores;
+        }
+
+        $constrained = $this->_conversationFlow->constrainScores($scores);
+        $this->recordConversationFlowDiagnostics();
+
+        return $constrained;
+    }
+
+    protected function advanceConversationFlow(?Intent $intent): void
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return;
+        }
+
+        $this->_conversationFlow->advance($intent ? $intent->getLabel() : null);
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function recordConversationFlowDiagnostics(): void
+    {
+        $this->_context->set(
+            'conversation_flow',
+            $this->_conversationFlow instanceof ConversationFlow ? $this->_conversationFlow->diagnostics() : []
+        );
     }
 
     protected function determineFallbackReason(?Intent $intent, ?Arr $scores, float $confidence, bool $allowLowConfidence): ?string
@@ -730,6 +843,8 @@ class SynthetIQ
             ],
             'audit' => $this->auditTrail(),
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'flow' => $this->arrayContextValue('conversation_flow'),
+            'state' => $this->_conversationState->toArray(),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,
@@ -762,14 +877,24 @@ class SynthetIQ
             $score += 3;
         }
 
-        // Run in interpreter to see if it's valid
-        if ( $this->_interpreter->isValid($node['response']) ) {
+        // Run in interpreter to see if it's valid.
+        try {
+            $interpreterValid = $this->_interpreter->isValid($node['response']);
+        } catch (Throwable $e) {
+            $interpreterValid = false;
+        }
+
+        if ( $interpreterValid ) {
             // echo "-- Interpreter match\n";
             $score += 2;
 
             if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
-                $tokens = $this->_interpreter->tokenize($node['response']);
-                $output = $this->_interpreter->parse($tokens);
+                try {
+                    $tokens = $this->_interpreter->tokenize($node['response']);
+                    $output = $this->_interpreter->parse($tokens);
+                } catch (Throwable $e) {
+                    $output = [];
+                }
             }
 
             // var_dump($output);

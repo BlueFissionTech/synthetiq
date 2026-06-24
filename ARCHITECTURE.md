@@ -31,6 +31,8 @@ Automata and Develation for language, memory, and orchestration primitives.
      fallback paths.
    - Response envelopes expose intent, score, fallback, memory, correction, and
      predictor diagnostics.
+   - Policy filters can deny input/output content, and the audit trail records
+     policy decisions plus turn-level diagnostics.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
@@ -132,4 +134,5 @@ while storing approved results as new training data. The router must:
   - selected routes,
   - memory retrieval hits,
   - fallback triggers.
+  - policy decisions and redacted audit payloads.
 

@@ -40,7 +40,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Intents\Classifier`: Uses Automata matchers with a naive keyword fallback.
 - `Intents\IntelligenceRouter`: Blends matcher, keyword overlap, and optional Naive Bayes strategy scores.
 - `Language\SpellCorrector`: Provides optional vocabulary-driven edit-distance normalization.
-- `Responses\Generator`: Template-based response rendering.
+- `Responses\Generator`: Template-based response rendering with opt-in scripted blocks.
 - `Responses\Selector`: Decision-tree selection with predictive scoring.
 - `ConversationHistory`: Stores past input/response pairs.
 - `Skills\*`: Optional Automata skills for specific behaviors.
@@ -63,6 +63,8 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 
 - Routes are added via `SynthetIQ::addRoute($statement, $type, $to)`.
 - Templates are simple text strings with optional `{{input}}` substitutions.
+- Scripted `{=...}` blocks are opt-in and limited to variable paths plus safe
+  transforms. They never execute arbitrary PHP or shell commands.
 - Sample configuration is provided in `sample_configs/`.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.

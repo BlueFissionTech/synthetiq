@@ -192,6 +192,20 @@ The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
 
+## Scripted Template Blocks
+
+Response templates support opt-in `{=...}` blocks for bounded dynamic values.
+The renderer resolves `input`, `intent`, and `context.*` paths plus the safe
+transforms `upper`, `lower`, `trim`, and `capitalize`. It does not execute
+arbitrary PHP or external scripts.
+
+```php
+$ai->enableScriptedTemplates(true);
+```
+
+When disabled, scripted blocks remain literal text. See
+`docs/scripted-templates.md` and `sample_configs/scripted_templates.php`.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

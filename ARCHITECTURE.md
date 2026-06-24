@@ -23,6 +23,8 @@ Automata and Develation for language, memory, and orchestration primitives.
 4. **Response generation**
    - `BlueFission\SynthetIQ\Responses\Generator` renders templates via
      `BlueFission\HTML\Template`.
+   - Optional scripted template blocks are resolved by a bounded renderer before
+     the final template render.
 5. **Response selection**
    - `BlueFission\SynthetIQ\Responses\Selector` scores candidates using a
      trigram predictor and heuristics.
@@ -84,10 +86,9 @@ and large-scale retrieval pipelines. SynthetIQ currently lacks:
 
 ### Scripted Vibe Templates
 
-- Expand template support for `{=...}` to run scripted conversation "vibes":
-  - themed tone modifiers,
-  - persona state toggles,
-  - dynamic variable injection from context/memory.
+- Keep `{=...}` blocks bounded to deterministic path resolution and safe
+  transforms. Broader script execution belongs outside the default response
+  renderer contract.
 
 ### Spelling and Near-Match Tolerance
 

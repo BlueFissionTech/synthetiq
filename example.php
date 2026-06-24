@@ -1,171 +1,91 @@
 <?php
+
+declare(strict_types=1);
+
+use BlueFission\Arr;
+use BlueFission\Net\HTTP;
+use BlueFission\Str;
 use BlueFission\SynthetIQ\SynthetIQ;
-use BlueFission\Automata\Language\{
-    Interpreter,
-    Grammar,
-    StemmerLemmatizer,
-    Documenter,
-    Walker
-};
-use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
-use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
+use BlueFission\Val;
 
-require 'vendor/autoload.php';
+require __DIR__ . '/examples/support.php';
 
-require 'sample_configs/skills.php';
+$runtime = synthetiq_example_build(['fallback' => true]);
+$ai = $runtime['ai'];
 
-$dialogue = require 'sample_configs/dialogue.php';
-$intentBoosts = require 'sample_configs/intent_boosts.php';
-$grammar = require 'sample_configs/grammar.php';
-$tokens = require 'sample_configs/tokens.php';
-$documenter = require 'sample_configs/documenter.php';
-
-$modelDir = __DIR__ . DIRECTORY_SEPARATOR . 'models' . DIRECTORY_SEPARATOR . 'ml' . DIRECTORY_SEPARATOR;
-if (!is_dir($modelDir)) {
-    mkdir($modelDir, 0777, true);
-}
-
-$interpreter = new Interpreter(
-    new Grammar( 
-        new StemmerLemmatizer(),
-        $grammar['rules'],
-        $grammar['commands'],
-        $tokens
-    ), 
-    $documenter,
-    new Walker()
-);
-
-$analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
-
-$ai = new SynthetIQ( $interpreter, $analyzer );
-// Default fallback if selection yields no response.
-$fallbackResponse = "I'm not sure how to respond to that yet.";
-
-function normalizeKeywords(array $keywords, array $exclude = []): array
+function synthetiq_example_turn(SynthetIQ $ai, string $message): array
 {
-    $excludeSet = [];
-    foreach ($exclude as $value) {
-        $excludeSet[strtolower(trim((string)$value))] = true;
+    $message = Str::make($message)->trim()->val();
+    if (Val::isEmpty($message)) {
+        return [
+            'response' => 'Please enter a message.',
+            'intent' => ['label' => 'input.empty'],
+            'fallback' => ['used' => true, 'reason' => 'empty_input'],
+        ];
     }
 
-    $normalized = [];
-    foreach ($keywords as $keyword) {
-        $keyword = strtolower(trim((string)$keyword));
-        if ($keyword === '' || isset($excludeSet[$keyword])) {
-            continue;
-        }
-        $normalized[$keyword] = true;
-    }
-
-    return array_keys($normalized);
+    return $ai->processInputEnvelope($message);
 }
 
-function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = []): void
-{
-    $stopwords = ['how', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'on', 'in'];
-    $total = 0;
-    foreach ($dialogue as $info) {
-        $total += count($info[1]);
-    }
-
-    $current = 0;
-    foreach ($dialogue as $category => $info) {
-        $boost = $intentBoosts[$category] ?? [];
-        $keywords = $info[2] ?? [];
-        if (!empty($boost['keywords'])) {
-            $keywords = array_merge($keywords, $boost['keywords']);
+if (PHP_SAPI === 'cli') {
+    $args = Arr::slice($_SERVER['argv'] ?? [], 1);
+    if (Val::isNotEmpty($args)) {
+        $message = '';
+        foreach ($args as $arg) {
+            $message = Str::make($message)->append(' ')->append((string)$arg)->trim()->val();
         }
-        $exclude = $boost['exclude'] ?? [];
-        $keywords = normalizeKeywords($keywords, array_merge($stopwords, $exclude));
-        $priorityBase = $boost['priority'] ?? null;
-        $ai->addIntentKeywords($category, $keywords, $priorityBase);
 
-        foreach ($info[1] as $statement) {
-            $ai->addRoute($statement, $category, $info[0]);
-            $current++;
-            if ($current % 50 === 0 || $current === $total) {
-                $percent = (int)round(($current / $total) * 100);
-                echo "\rTraining: {$current}/{$total} ({$percent}%)";
-                if (function_exists('flush')) {
-                    flush();
-                }
-            }
-        }
-    }
-    echo "\rTraining: {$total}/{$total} (100%)\n";
-}
-
-trainRoutes($ai, $dialogue, $intentBoosts);
-
-// if is running on command line
-if ( php_sapi_name() === 'cli' ) {
-    $args = array_slice($argv, 1);
-    if (!empty($args)) {
-        $userMessage = trim(implode(' ', $args));
-        $response = $ai->processInput($userMessage);
-        if ($response === '') {
-            $response = $fallbackResponse;
-        }
-        echo "You: {$userMessage}\n";
-        echo "AI: {$response}\n";
-        exit;
+        $envelope = synthetiq_example_turn($ai, $message);
+        echo "You: {$message}\n";
+        echo 'AI: ' . (string)($envelope['response'] ?? '') . "\n";
+        echo 'Intent: ' . (string)($envelope['intent']['label'] ?? 'unknown.intent') . "\n";
+        exit(0);
     }
 
     echo "SynthetIQ Chat System (type 'exit' to quit)\n";
-    echo "----------------------------------\n";
+    echo "------------------------------------------\n";
 
-    $handle = fopen("php://stdin", "r");
-    while (true) {
-        echo "You: ";
-        $userMessage = trim(fgets($handle) ?: '');
+    $handle = fopen('php://stdin', 'r');
+    while ($handle) {
+        echo 'You: ';
+        $message = Str::make((string)fgets($handle))->trim()->val();
 
-        if ($userMessage === '') {
+        if (Val::isEmpty($message)) {
             continue;
         }
 
-        if (strtolower($userMessage) === 'exit') {
+        if (Str::match($message, 'exit', Str::IGNORE_CASE)) {
             echo "Goodbye!\n";
             break;
         }
 
-        try {
-            $response = $ai->processInput($userMessage);
-        } catch (Exception $e) {
-            $response = $e->getMessage();
-        }
-
-        if ($response === '') {
-            $response = $fallbackResponse;
-        }
-
-        echo "AI: " . $response . PHP_EOL;
+        $envelope = synthetiq_example_turn($ai, $message);
+        echo 'AI: ' . (string)($envelope['response'] ?? '') . PHP_EOL;
+        echo 'Intent: ' . (string)($envelope['intent']['label'] ?? 'unknown.intent') . PHP_EOL;
     }
 
-    fclose($handle);
-    exit;
+    if ($handle) {
+        fclose($handle);
+    }
+
+    exit(0);
 }
 
-// if is post request
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($method === 'POST') {
+$method = (string)($_SERVER['REQUEST_METHOD'] ?? 'GET');
+if (Str::match($method, 'POST')) {
     header('Content-Type: application/json');
 
-    $input = json_decode(file_get_contents('php://input'), true);
-    $userMessage = $input['message'] ?? '';
-    if (!is_string($userMessage) || trim($userMessage) === '') {
-        http_response_code(400);
-        echo json_encode(['response' => $fallbackResponse]);
-        exit;
-    }
+    $input = HTTP::jsonDecode((string)file_get_contents('php://input'), true, []);
+    $message = Arr::is($input) ? (string)($input['message'] ?? '') : '';
+    $envelope = synthetiq_example_turn($ai, $message);
 
-    $response = $ai->processInput($userMessage);
-    if ($response === '') {
-        $response = $fallbackResponse;
-    }
-    echo json_encode(['response' => $response]);
+    echo synthetiq_example_json([
+        'response' => (string)($envelope['response'] ?? ''),
+        'intent' => (string)($envelope['intent']['label'] ?? 'unknown.intent'),
+        'fallback' => (bool)($envelope['fallback']['used'] ?? false),
+    ]);
 
-    exit;
+    exit(0);
 }
 ?>
 <!DOCTYPE html>
@@ -173,99 +93,146 @@ if ($method === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat System</title>
+    <title>SynthetIQ Example</title>
     <style>
+        :root {
+            color-scheme: light;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
         body {
-            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
+            min-height: 100vh;
+            background: #f6f7f9;
+            color: #1f2933;
         }
-        .chat-container {
-            width: 100%;
-            max-width: 600px;
+
+        main {
+            width: min(760px, calc(100% - 32px));
             margin: 0 auto;
-            background-color: #fff;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 5px;
+            padding: 32px 0;
         }
+
+        h1 {
+            margin: 0 0 20px;
+            font-size: 28px;
+            font-weight: 650;
+        }
+
+        .chat {
+            border: 1px solid #d7dde5;
+            border-radius: 8px;
+            background: #fff;
+            overflow: hidden;
+        }
+
         .messages {
-            max-height: 300px;
+            min-height: 320px;
+            max-height: 420px;
             overflow-y: auto;
-            margin-bottom: 20px;
+            padding: 16px;
         }
+
         .message {
-            padding: 10px;
-            border-bottom: 1px solid #eaeaea;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            line-height: 1.45;
         }
+
         .message.user {
-            text-align: right;
-            background-color: #d4f7dc;
+            margin-left: 18%;
+            background: #d9f0e2;
         }
+
         .message.ai {
-            text-align: left;
-            background-color: #f7f7d4;
+            margin-right: 18%;
+            background: #eef1f5;
         }
-        .message:last-child {
-            border-bottom: none;
+
+        .message small {
+            display: block;
+            margin-top: 4px;
+            color: #52616f;
+            font-size: 12px;
         }
+
         form {
             display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-top: 1px solid #d7dde5;
+            background: #fbfcfd;
         }
-        input[type="text"] {
+
+        input {
             flex: 1;
-            padding: 10px;
-            border: 1px solid #eaeaea;
-            border-radius: 5px;
+            min-width: 0;
+            padding: 10px 12px;
+            border: 1px solid #c7d0dc;
+            border-radius: 6px;
+            font: inherit;
         }
+
         button {
-            padding: 10px 20px;
-            border: none;
-            background-color: #007bff;
+            padding: 10px 16px;
+            border: 0;
+            border-radius: 6px;
+            background: #255f85;
             color: #fff;
-            border-radius: 5px;
+            font: inherit;
             cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div class="chat-container">
+<main>
+    <h1>SynthetIQ Example</h1>
+    <section class="chat">
         <div class="messages" id="messages"></div>
         <form id="chatForm">
-            <input type="text" id="userMessage" placeholder="Type your message here..." autocomplete="off">
+            <input type="text" id="userMessage" placeholder="Type a message" autocomplete="off">
             <button type="submit">Send</button>
         </form>
-    </div>
+    </section>
+</main>
+<script>
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('userMessage');
+    const messages = document.getElementById('messages');
 
-    <script>
-        document.getElementById('chatForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            let userMessage = document.getElementById('userMessage').value;
-            if (userMessage.trim() !== '') {
-                addMessage('user', userMessage);
-                document.getElementById('userMessage').value = '';
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) {
+            return;
+        }
 
-                fetch('example.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: userMessage })
-                })
-                .then(response => response.json())
-                .then(data => addMessage('ai', data.response))
-                .catch(error => console.error('Error:', error));
-            }
+        addMessage('user', text);
+        input.value = '';
+
+        const response = await fetch('example.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: text})
         });
 
-        function addMessage(sender, text) {
-            let messageDiv = document.createElement('div');
-            messageDiv.classList.add('message', sender);
-            messageDiv.textContent = text;
-            document.getElementById('messages').appendChild(messageDiv);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        const data = await response.json();
+        addMessage('ai', data.response, data.intent + (data.fallback ? ' fallback' : ''));
+    });
+
+    function addMessage(sender, text, meta = '') {
+        const element = document.createElement('div');
+        element.className = 'message ' + sender;
+        element.textContent = text;
+        if (meta) {
+            const small = document.createElement('small');
+            small.textContent = meta;
+            element.appendChild(small);
         }
-    </script>
+        messages.appendChild(element);
+        messages.scrollTop = messages.scrollHeight;
+    }
+</script>
 </body>
 </html>

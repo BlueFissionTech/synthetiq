@@ -2,6 +2,8 @@
 
 namespace BlueFission\SynthetIQ\Memory;
 
+use BlueFission\Val;
+
 class MemoryRecall
 {
     protected array $related;
@@ -32,7 +34,7 @@ class MemoryRecall
 
     public function isEmpty(): bool
     {
-        return empty($this->related) && empty($this->intentBiases);
+        return Val::isEmpty($this->related) && Val::isEmpty($this->intentBiases);
     }
 
     public function toArray(): array

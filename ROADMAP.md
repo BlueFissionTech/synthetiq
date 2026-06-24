@@ -47,7 +47,7 @@ Status legend: Implemented, Partial, Not implemented.
 | Intent keyword boosts | Curated keywords per intent | Implemented |
 | Scripted vibe templates | Opt-in safe `{=...}` variable and transform blocks | Implemented |
 | Spelling tolerance | Vocabulary edit-distance correction; phonetics and synonyms pending | Partial |
-| Short-term memory | Holoscene + ABS memory | Partial |
+| Short-term memory | Holoscene + ABS memory with response-selection context | Partial |
 | Context routing | Intent weighting by history | Partial |
 | Strategy ensemble | Matcher, keyword overlap, and optional Naive Bayes scoring | Partial |
 | LLM fallback | Mini quantized LLM for unknown intent | Partial |

@@ -6,6 +6,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Intent;
 use BlueFission\Automata\Memory\Abs2Memory;
 use BlueFission\SynthetIQ\Memory\HolosceneMemoryAdapter;
+use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use PHPUnit\Framework\TestCase;
 
 class HolosceneMemoryAdapterTest extends TestCase
@@ -31,5 +32,22 @@ class HolosceneMemoryAdapterTest extends TestCase
         $biases = $recall->intentBiases();
 
         $this->assertArrayHasKey('greeting.intent', $biases);
+    }
+
+    public function testPermissionGuardDeniesMemoryRead(): void
+    {
+        $memory = new Abs2Memory();
+        $adapter = new HolosceneMemoryAdapter($memory, null, null, [
+            'permission_guard' => function (string $action): bool {
+                return $action !== 'read';
+            },
+        ]);
+
+        $recall = $adapter->recall('hello', new Context());
+
+        $this->assertInstanceOf(MemoryRecall::class, $recall);
+        $this->assertTrue($recall->isEmpty());
+        $this->assertSame([], $recall->related());
+        $this->assertSame([], $recall->intentBiases());
     }
 }

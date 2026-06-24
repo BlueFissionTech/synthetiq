@@ -1,68 +1,36 @@
 <?php
 
-use BlueFission\SynthetIQ\SynthetIQ;
-use BlueFission\Automata\Language\{
-    Interpreter,
-    Grammar,
-    StemmerLemmatizer,
-    Documenter,
-    Walker
-};
-use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
-use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
+declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/support.php';
 
-$grammar = require __DIR__ . '/../sample_configs/grammar.php';
-$tokens = require __DIR__ . '/../sample_configs/tokens.php';
-$documenter = require __DIR__ . '/../sample_configs/documenter.php';
-
-$modelDir = __DIR__ . '/../models/ml/';
-if (!is_dir($modelDir)) {
-    mkdir($modelDir, 0777, true);
-}
-
-$interpreter = new Interpreter(
-    new Grammar(
-        new StemmerLemmatizer(),
-        $grammar['rules'],
-        $grammar['commands'],
-        $tokens
-    ),
-    $documenter,
-    new Walker()
-);
-
-$analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
-$ai = new SynthetIQ($interpreter, $analyzer);
+$config = synthetiq_example_config();
+$ai = synthetiq_example_create_ai($config, [
+    'router_options' => [
+        'enable_naive_bayes' => false,
+    ],
+]);
 
 $routes = [
     'greeting.intent' => [
         'to' => ['greeting.reply'],
-        'statements' => [
-            'hello',
-            'hi there',
-            'good morning',
-        ],
+        'statements' => ['hello', 'hi there', 'good morning'],
     ],
     'greeting.reply' => [
         'to' => [],
-        'statements' => [
-            'Hello!',
-            'Hi there!',
-            'Good to see you.',
-        ],
+        'statements' => ['Hello!', 'Hi there!', 'Good to see you.'],
     ],
 ];
 
 foreach ($routes as $type => $route) {
     foreach ($route['statements'] as $statement) {
-        $ai->addRoute($statement, $type, $route['to']);
+        $ai->addRoute((string)$statement, (string)$type, $route['to']);
     }
 }
 
-$input = $argv[1] ?? 'hello';
-$response = $ai->processInput($input);
+$input = (string)($argv[1] ?? 'hello');
+$envelope = $ai->processInputEnvelope($input);
 
 echo "You: {$input}\n";
-echo "AI: {$response}\n";
+echo 'AI: ' . (string)$envelope['response'] . "\n";
+echo 'Intent: ' . (string)($envelope['intent']['label'] ?? 'unknown.intent') . "\n";

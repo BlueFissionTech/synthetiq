@@ -21,12 +21,18 @@ use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
 use BlueFission\SynthetIQ\Responses\ScriptedTemplateRenderer;
+use BlueFission\SynthetIQ\Audit\AuditTrail;
+use BlueFission\SynthetIQ\Policy\PolicyDecision;
+use BlueFission\SynthetIQ\Policy\PolicyFilterInterface;
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\Val;
 use BlueFission\DevElation as Dev;
+use Throwable;
 
 class SynthetIQ
 {
@@ -43,6 +49,10 @@ class SynthetIQ
     protected $_learningModel;
     protected $_memoryAdapter;
     protected $_fallbackResponder;
+    protected $_policyFilters;
+    protected $_auditTrail;
+    protected $_conversationFlow;
+    protected $_conversationState;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
     protected bool $_spellCorrectionEnabled = true;
@@ -68,11 +78,16 @@ class SynthetIQ
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_policyFilters = [];
+        $this->_auditTrail = new AuditTrail();
+        $this->_conversationFlow = null;
+        $this->_conversationState = new ConversationState();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
 
+        $this->applyConversationState();
         $this->refreshResponseSelector();
     }
 
@@ -84,6 +99,79 @@ class SynthetIQ
     public function setFallbackResponder(?FallbackResponderInterface $responder): void
     {
         $this->_fallbackResponder = $responder ?? new NullFallbackResponder();
+    }
+
+    public function addPolicyFilter(PolicyFilterInterface $filter): void
+    {
+        $this->_policyFilters[] = $filter;
+    }
+
+    public function clearPolicyFilters(): void
+    {
+        $this->_policyFilters = [];
+    }
+
+    public function auditTrail(): array
+    {
+        return $this->_auditTrail->records();
+    }
+
+    public function resetAuditTrail(): void
+    {
+        $this->_auditTrail->clear();
+    }
+
+    public function setAuditRedactor(?callable $redactor): void
+    {
+        $this->_auditTrail->setRedactor($redactor);
+    public function setConversationFlow(?ConversationFlow $flow): void
+    {
+        $this->_conversationFlow = $flow;
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    public function conversationFlow(): ?ConversationFlow
+    {
+        return $this->_conversationFlow;
+    }
+
+    public function resetConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->reset();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function abandonConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->abandon();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function completeConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->complete();
+            $this->recordConversationFlowDiagnostics();
+        }
+    public function conversationState(): ConversationState
+    {
+        return $this->_conversationState;
+    }
+
+    public function setConversationState(?ConversationState $state): void
+    {
+        $this->_conversationState = $state ?? new ConversationState();
+        $this->applyConversationState();
+    }
+
+    public function resetConversationState(): void
+    {
+        $this->_conversationState->reset();
+        $this->applyConversationState();
     }
 
     public function setConfidenceThreshold(?float $threshold): void
@@ -166,11 +254,26 @@ class SynthetIQ
     {
         $rawInput = $input;
         $this->resetTurnDiagnostics($rawInput);
+        $this->applyConversationState();
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
+        $inputPolicy = $this->inspectPolicy('input', $input, []);
+        if (!$inputPolicy->allowed()) {
+            return $this->denyTurn($input, $inputPolicy);
+        }
+
         // Run the input through the interpreter, it will produce an output
         $this->_interpreter->run(Str::lower($input));
+        // Run the input through the interpreter when it accepts the phrase.
+        try {
+            $this->_interpreter->run(Str::lower($input));
+        } catch (Throwable $e) {
+            Dev::do('synthetiq.interpreter.run_failed', [
+                'input' => $input,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $memoryRecall = $this->recallMemory($input);
 
@@ -178,6 +281,7 @@ class SynthetIQ
         if ($memoryRecall) {
             $scores = $this->applyIntentBiases($scores, $memoryRecall->intentBiases());
         }
+        $scores = $this->applyConversationFlow($scores);
 
         $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
         $confidence = $this->computeConfidence($scores);
@@ -186,6 +290,11 @@ class SynthetIQ
         $this->_context->set('intent_scores', $turnScores);
         $this->_context->set('selected_intent_scores', $turnScores);
         $this->_context->set('intent_confidence', $confidence);
+        $this->recordAudit('intent.scored', [
+            'input' => $input,
+            'scores' => $turnScores,
+            'confidence' => $confidence,
+        ]);
         Dev::do('synthetiq.intent.scored', [
             'input' => $input,
             'scores' => $scores ? $scores->toArray() : [],
@@ -202,8 +311,11 @@ class SynthetIQ
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, false);
         if ($fallbackResponse !== null) {
             $response = $fallbackResponse;
+            $response = $this->inspectOutputPolicy($response, $intent, $turnScores);
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
+            $this->advanceConversationFlow($intent);
+            $this->recordConversationStateTurn($intent, $response);
             if ($this->_learningModel) {
                 $this->_learningModel->observe($input, $response, $this->_context);
             }
@@ -272,8 +384,17 @@ class SynthetIQ
             $this->_context->set('selected_intent_scores', $turnScores);
         }
 
+        $response = $this->inspectOutputPolicy($response, $intent, $turnScores);
+        $this->recordAudit('response.selected', [
+            'intent' => $intent ? $intent->getLabel() : null,
+            'response' => $response,
+            'scores' => $turnScores,
+        ]);
+
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
+        $this->advanceConversationFlow($intent);
+        $this->recordConversationStateTurn($intent, $response);
         if ($this->_learningModel) {
             $this->_learningModel->observe($input, $response, $this->_context);
         }
@@ -381,10 +502,32 @@ class SynthetIQ
         }
 
         if (Arr::count($updated) > 0) {
-            arsort($updated);
+            $updated = $this->sortScoreMap($updated);
         }
 
         return Arr::make($updated);
+    }
+
+    protected function sortScoreMap(array $scores): array
+    {
+        $pairs = [];
+        foreach ($scores as $label => $score) {
+            $pairs[] = [
+                'label' => $label,
+                'score' => $score,
+            ];
+        }
+
+        $pairs = Arr::make($pairs)->sort(function ($left, $right) {
+            return $right['score'] <=> $left['score'];
+        })->toArray();
+
+        $sorted = [];
+        foreach ($pairs as $pair) {
+            $sorted[$pair['label']] = $pair['score'];
+        }
+
+        return $sorted;
     }
 
     protected function computeConfidence(?Arr $scores): float
@@ -432,9 +575,26 @@ class SynthetIQ
         $this->_context->set('fallback_used', false);
         $this->_context->set('fallback_reason', null);
         $this->_context->set('memory_recall', []);
+        $this->_context->set('memory_response_context', []);
+        $this->_context->set('memory_selection', []);
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
+        $this->_context->set('policy_denied', false);
+        $this->_context->set('policy_reason', null);
+        $this->_context->set('policy_stage', null);
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function applyConversationState(): void
+    {
+        $this->_conversationState->applyToContext($this->_context);
+    }
+
+    protected function recordConversationStateTurn(?Intent $intent, string $response): void
+    {
+        $this->_conversationState->captureTurn($intent, $response);
+        $this->applyConversationState();
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -449,6 +609,36 @@ class SynthetIQ
         }
 
         $this->_spellCorrector->addText((string)$terms);
+    }
+
+    protected function applyConversationFlow(?Arr $scores): ?Arr
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return $scores;
+        }
+
+        $constrained = $this->_conversationFlow->constrainScores($scores);
+        $this->recordConversationFlowDiagnostics();
+
+        return $constrained;
+    }
+
+    protected function advanceConversationFlow(?Intent $intent): void
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return;
+        }
+
+        $this->_conversationFlow->advance($intent ? $intent->getLabel() : null);
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function recordConversationFlowDiagnostics(): void
+    {
+        $this->_context->set(
+            'conversation_flow',
+            $this->_conversationFlow instanceof ConversationFlow ? $this->_conversationFlow->diagnostics() : []
+        );
     }
 
     protected function determineFallbackReason(?Intent $intent, ?Arr $scores, float $confidence, bool $allowLowConfidence): ?string
@@ -496,6 +686,7 @@ class SynthetIQ
         if (Str::is($response) && Val::isNotEmpty($response)) {
             $this->_context->set('fallback_used', true);
             $this->_context->set('fallback_reason', $reason);
+            $this->recordAudit('fallback.triggered', $meta);
             Dev::do('synthetiq.fallback.triggered', $meta);
 
             return $response;
@@ -514,9 +705,69 @@ class SynthetIQ
         $recall = $this->_memoryAdapter->recall($input, $this->_context, $meta);
         if (!$recall->isEmpty()) {
             $this->_context->set('memory_recall', $recall->toArray());
+            $this->_context->set('memory_response_context', $this->buildMemoryResponseContext($recall));
+            $this->recordAudit('memory.recalled', $recall->toArray());
         }
 
         return $recall;
+    }
+
+    protected function inspectPolicy(string $stage, string $text, array $meta): PolicyDecision
+    {
+        foreach ($this->_policyFilters as $filter) {
+            if (!$filter instanceof PolicyFilterInterface) {
+                continue;
+            }
+
+            $decision = $stage === 'input'
+                ? $filter->inspectInput($text, $this->_context, $meta)
+                : $filter->inspectOutput($text, $this->_context, $meta);
+
+            $this->recordAudit("policy.{$stage}.decision", $decision->toArray());
+            if (!$decision->allowed()) {
+                $this->_context->set('policy_denied', true);
+                $this->_context->set('policy_reason', $decision->reason());
+                $this->_context->set('policy_stage', $stage);
+                $this->recordAudit("policy.{$stage}.denied", $decision->toArray());
+
+                return $decision;
+            }
+        }
+
+        return PolicyDecision::allow("{$stage}_allowed");
+    }
+
+    protected function denyTurn(string $input, PolicyDecision $decision): string
+    {
+        $response = $decision->replacement() ?? 'This request cannot be handled by the configured policy.';
+        $intent = new Intent('policy.denied', 'Policy Denied');
+        $this->_context->set('current_intent', $intent);
+        $this->_context->set('selected_intent_label', $intent->getLabel());
+        $this->_context->set('selected_intent_scores', [$intent->getLabel() => 1.0]);
+        $this->_context->set('intent_confidence', 1.0);
+        $this->_history->addEntry($input, $response);
+        $this->_context->set('last_intent', $intent);
+
+        return $response;
+    }
+
+    protected function inspectOutputPolicy(string $response, ?Intent $intent, array $scores): string
+    {
+        $decision = $this->inspectPolicy('output', $response, [
+            'intent' => $intent ? $intent->getLabel() : null,
+            'scores' => $scores,
+        ]);
+
+        if ($decision->allowed()) {
+            return $response;
+        }
+
+        return $decision->replacement() ?? 'This response was blocked by the configured policy.';
+    }
+
+    protected function recordAudit(string $event, array $payload = []): void
+    {
+        $this->_auditTrail->record($event, $payload);
     }
 
     protected function recordMemory(string $input, string $response): void
@@ -592,16 +843,17 @@ class SynthetIQ
 
     protected function recordSelectedResponseIntent(string $response, array $responseIntentMap, ?MemoryRecall $memoryRecall): void
     {
-        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
-            return;
-        }
-
         if (!Arr::hasKey($responseIntentMap, $response)) {
             return;
         }
 
         $label = (string)$responseIntentMap[$response];
         if (Val::isEmpty($label)) {
+            return;
+        }
+
+        if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
+            $this->_context->set('memory_selection', $this->buildMemorySelectionContext($memoryRecall, $response, $label));
             return;
         }
 
@@ -621,6 +873,7 @@ class SynthetIQ
         $corrected = $this->_context->get('input_corrected');
         $original = $this->_context->get('input_original');
         $memoryRecall = $this->_context->get('memory_recall');
+        $memorySelection = $this->_context->get('memory_selection');
         $predictor = $this->_context->get('response_predictor');
 
         return [
@@ -638,7 +891,21 @@ class SynthetIQ
                 'used' => (bool)$this->_context->get('fallback_used'),
                 'reason' => $this->_context->get('fallback_reason'),
             ],
+            'memory' => Arr::merge(
+                Arr::is($memoryRecall) ? $memoryRecall : [],
+                [
+                    'selection' => Arr::is($memorySelection) ? $memorySelection : [],
+                ]
+            ),
+            'policy' => [
+                'denied' => (bool)$this->_context->get('policy_denied'),
+                'reason' => $this->_context->get('policy_reason'),
+                'stage' => $this->_context->get('policy_stage'),
+            ],
+            'audit' => $this->auditTrail(),
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'flow' => $this->arrayContextValue('conversation_flow'),
+            'state' => $this->_conversationState->toArray(),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,
@@ -658,6 +925,83 @@ class SynthetIQ
         return Arr::is($value) ? $value : [];
     }
 
+    protected function buildMemoryResponseContext(MemoryRecall $recall): array
+    {
+        $items = [];
+
+        foreach ($recall->related() as $label => $entry) {
+            $items[] = $this->normalizeMemoryEntry($label, $entry);
+        }
+
+        return Arr::make($items)->filter(function ($entry): bool {
+            return Val::isNotEmpty($entry);
+        })->toArray();
+    }
+
+    protected function buildMemorySelectionContext(MemoryRecall $recall, string $response, string $label): array
+    {
+        $responseContext = $this->arrayContextValue('memory_response_context');
+        $matches = [];
+
+        foreach ($responseContext as $entry) {
+            if (!Arr::is($entry)) {
+                continue;
+            }
+
+            $entryResponse = (string)($entry['response'] ?? '');
+            $entryIntent = (string)($entry['intent_label'] ?? '');
+            $matchesResponse = Val::isNotEmpty($entryResponse) && $entryResponse === $response;
+            $matchesIntent = Val::isNotEmpty($entryIntent) && $entryIntent === $label;
+
+            if ($matchesResponse || $matchesIntent) {
+                $matches[] = $entry;
+            }
+        }
+
+        return [
+            'selected_response' => $response,
+            'selected_intent' => $label,
+            'related_count' => Arr::count($responseContext),
+            'matched_count' => Arr::count($matches),
+            'matches' => $matches,
+            'intentBiases' => $recall->intentBiases(),
+            'meta' => $recall->meta(),
+        ];
+    }
+
+    protected function normalizeMemoryEntry($label, $entry): array
+    {
+        $context = Arr::is($entry) ? ($entry['context'] ?? null) : null;
+        $record = [
+            'label' => (string)$label,
+            'similarity' => Arr::is($entry) && Arr::hasKey($entry, 'similarity') ? (float)$entry['similarity'] : null,
+        ];
+
+        if ($context instanceof Context) {
+            $record['input'] = $context->get('input');
+            $record['response'] = $context->get('response');
+            $record['intent_label'] = $context->get('intent_label');
+            $record['scope'] = $context->get('scope');
+            $record['user_id'] = $context->get('user_id');
+            $record['session_id'] = $context->get('session_id');
+            $record['timestamp'] = $context->get('timestamp');
+        } elseif (Arr::is($entry)) {
+            $record = Arr::merge($record, [
+                'input' => $entry['input'] ?? null,
+                'response' => $entry['response'] ?? null,
+                'intent_label' => $entry['intent_label'] ?? null,
+                'scope' => $entry['scope'] ?? null,
+                'user_id' => $entry['user_id'] ?? null,
+                'session_id' => $entry['session_id'] ?? null,
+                'timestamp' => $entry['timestamp'] ?? null,
+            ]);
+        }
+
+        return Arr::make($record)->filter(function ($value): bool {
+            return $value !== null && $value !== '';
+        })->toArray();
+    }
+
     public function evaluateNode(array $node): int
     {
         $score = 0;
@@ -674,14 +1018,24 @@ class SynthetIQ
             $score += 3;
         }
 
-        // Run in interpreter to see if it's valid
-        if ( $this->_interpreter->isValid($node['response']) ) {
+        // Run in interpreter to see if it's valid.
+        try {
+            $interpreterValid = $this->_interpreter->isValid($node['response']);
+        } catch (Throwable $e) {
+            $interpreterValid = false;
+        }
+
+        if ( $interpreterValid ) {
             // echo "-- Interpreter match\n";
             $score += 2;
 
             if ($this->canCall($this->_interpreter, 'tokenize') && $this->canCall($this->_interpreter, 'parse')) {
-                $tokens = $this->_interpreter->tokenize($node['response']);
-                $output = $this->_interpreter->parse($tokens);
+                try {
+                    $tokens = $this->_interpreter->tokenize($node['response']);
+                    $output = $this->_interpreter->parse($tokens);
+                } catch (Throwable $e) {
+                    $output = [];
+                }
             }
 
             // var_dump($output);

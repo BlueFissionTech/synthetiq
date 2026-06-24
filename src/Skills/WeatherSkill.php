@@ -5,6 +5,7 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
 use BlueFission\SynthetIQ\Clients\LocationClientInterface;
 use BlueFission\SynthetIQ\Clients\WeatherClientInterface;
+use BlueFission\Val;
 
 class WeatherSkill extends BaseSkill
 {
@@ -21,7 +22,7 @@ class WeatherSkill extends BaseSkill
 
     public function execute(Context $context = null)
     {
-        $location = $context->get('location');
+        $location = $context ? (string)($context->get('location') ?? '') : '';
         $weather = $this->weather_client;
         $loc = $this->location_client;
 
@@ -31,8 +32,8 @@ class WeatherSkill extends BaseSkill
         }
 
         // Use the User's IP or connection to estimage a location if context is empty
-        if (empty($location)) {
-            $location = $loc ? $loc->getIpLocation() : 'New York';
+        if (Val::isEmpty($location)) {
+            $location = $loc ? $loc->getIpLocation() : '';
         }
 
         $this->response = $weather->getWeatherByLocation($location);

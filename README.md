@@ -76,6 +76,23 @@ See `example.php` for a CLI and browser demo.
 
 Third-party clients for news/weather/location are configured in `sample_configs/clients.php`.
 These rely on the Composer package `bluefission/simpleclients`.
+External weather and news clients are disabled by default in the sample config so clean installs do not require credentials or app globals.
+
+Use `BlueFission\SynthetIQ\Clients\ClientResolver` to wire optional clients explicitly:
+
+```php
+use BlueFission\SynthetIQ\Clients\ClientResolver;
+use BlueFission\SynthetIQ\Clients\WeatherClientInterface;
+
+$resolver = ClientResolver::make(require 'sample_configs/clients.php');
+$weatherClient = $resolver->client(WeatherClientInterface::class);
+```
+
+The sample config includes null clients for clean installs and lists the SimpleClients bindings that can be enabled by changing the `enabled` and `bindings` entries. A local fake-client example is available:
+
+```bash
+php examples/optional_clients.php
+```
 
 ## Core Components
 

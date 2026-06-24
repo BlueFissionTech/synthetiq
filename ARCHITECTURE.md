@@ -34,6 +34,8 @@ Automata and Develation for language, memory, and orchestration primitives.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
+   - `State\ConversationState` applies persona, tone, mood, task slots, session
+     metadata, and turn summaries to `Context` before each turn.
 8. **Memory hooks**
    - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
 9. **Route-state lifecycle**
@@ -46,6 +48,7 @@ Automata and Develation for language, memory, and orchestration primitives.
 - `sample_configs/skills.php` registers Automata intents/skills.
 - `sample_configs/intent_boosts.php` provides curated intent keyword boosts.
 - `sample_configs/eval_cases.php` provides evaluator cases.
+- `sample_configs/conversation_state.php` provides a serializable state-store example.
 
 ## Why It Does Not Match SmarterChild or Tay
 

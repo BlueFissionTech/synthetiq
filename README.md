@@ -192,6 +192,23 @@ The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
 
+## Conversation State
+
+`BlueFission\SynthetIQ\State\ConversationState` stores persona, mood, tone,
+task slots, session metadata, and turn summaries. `SynthetIQ` applies this state
+to the Automata context before each turn so routing, memory metadata, and
+response templates can read it without app globals:
+
+```php
+use BlueFission\SynthetIQ\State\ConversationState;
+
+$state = ConversationState::fromArray(require 'sample_configs/conversation_state.php');
+$ai->setConversationState($state);
+
+$envelope = $ai->processInputEnvelope('status');
+$tone = $envelope['state']['tone'];
+```
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

@@ -20,6 +20,7 @@ use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
+use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\Arr;
 use BlueFission\Func;
 use BlueFission\Num;
@@ -42,6 +43,7 @@ class SynthetIQ
     protected $_learningModel;
     protected $_memoryAdapter;
     protected $_fallbackResponder;
+    protected $_conversationState;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
     protected bool $_spellCorrectionEnabled = true;
@@ -67,11 +69,13 @@ class SynthetIQ
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_conversationState = new ConversationState();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
             $this->_confidenceThreshold = $confidenceThreshold;
         }
 
+        $this->applyConversationState();
         $this->refreshResponseSelector();
     }
 
@@ -83,6 +87,23 @@ class SynthetIQ
     public function setFallbackResponder(?FallbackResponderInterface $responder): void
     {
         $this->_fallbackResponder = $responder ?? new NullFallbackResponder();
+    }
+
+    public function conversationState(): ConversationState
+    {
+        return $this->_conversationState;
+    }
+
+    public function setConversationState(?ConversationState $state): void
+    {
+        $this->_conversationState = $state ?? new ConversationState();
+        $this->applyConversationState();
+    }
+
+    public function resetConversationState(): void
+    {
+        $this->_conversationState->reset();
+        $this->applyConversationState();
     }
 
     public function setConfidenceThreshold(?float $threshold): void
@@ -138,6 +159,7 @@ class SynthetIQ
     {
         $rawInput = $input;
         $this->resetTurnDiagnostics($rawInput);
+        $this->applyConversationState();
 
         $input = ContractionNormalizer::normalize($input);
         $input = $this->normalizeInput($input);
@@ -176,6 +198,7 @@ class SynthetIQ
             $response = $fallbackResponse;
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
+            $this->recordConversationStateTurn($intent, $response);
             if ($this->_learningModel) {
                 $this->_learningModel->observe($input, $response, $this->_context);
             }
@@ -246,6 +269,7 @@ class SynthetIQ
 
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
+        $this->recordConversationStateTurn($intent, $response);
         if ($this->_learningModel) {
             $this->_learningModel->observe($input, $response, $this->_context);
         }
@@ -407,6 +431,17 @@ class SynthetIQ
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
+    }
+
+    protected function applyConversationState(): void
+    {
+        $this->_conversationState->applyToContext($this->_context);
+    }
+
+    protected function recordConversationStateTurn(?Intent $intent, string $response): void
+    {
+        $this->_conversationState->captureTurn($intent, $response);
+        $this->applyConversationState();
     }
 
     protected function updateSpellVocabulary($terms): void
@@ -611,6 +646,7 @@ class SynthetIQ
                 'reason' => $this->_context->get('fallback_reason'),
             ],
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'state' => $this->_conversationState->toArray(),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,
                 'original' => $original,

@@ -192,6 +192,24 @@ The envelope includes the response text, raw and normalized input, selected
 intent label, confidence, score map, fallback state, memory recall summary,
 correction metadata, and response predictor diagnostics.
 
+## Conversation Flow Graphs
+
+`BlueFission\SynthetIQ\Flow\ConversationFlow` defines explicit multi-turn
+states, allowed intents, transitions, fallback intents, and completion state.
+Attach a flow to constrain routing while a task is active:
+
+```php
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
+
+$flow = ConversationFlow::fromArray(require 'sample_configs/conversation_flow.php');
+$ai->setConversationFlow($flow);
+
+$envelope = $ai->processInputEnvelope('ship');
+$current = $envelope['flow']['current_state'];
+```
+
+Flows can be reset, completed, or abandoned through `SynthetIQ` methods.
+
 ## Notes and Constraints
 
 - This library is not a generative model. It predicts and selects from known statements.

@@ -34,9 +34,12 @@ Automata and Develation for language, memory, and orchestration primitives.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
-8. **Memory hooks**
+8. **Conversation flow graphs**
+   - `Flow\ConversationFlow` can constrain intent scores by active flow state,
+     advance by selected intent, and report completion or abandonment.
+9. **Memory hooks**
    - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
-9. **Route-state lifecycle**
+10. **Route-state lifecycle**
    - `RouteTrainer` compiles, saves, validates, and applies cached route
      catalogs for offline preparation.
 
@@ -46,6 +49,7 @@ Automata and Develation for language, memory, and orchestration primitives.
 - `sample_configs/skills.php` registers Automata intents/skills.
 - `sample_configs/intent_boosts.php` provides curated intent keyword boosts.
 - `sample_configs/eval_cases.php` provides evaluator cases.
+- `sample_configs/conversation_flow.php` provides a multi-turn flow graph example.
 
 ## Why It Does Not Match SmarterChild or Tay
 

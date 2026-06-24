@@ -427,6 +427,23 @@ class SynthetIQTest extends TestCase
         $this->assertSame('hello', $envelope['input']['normalized']);
     }
 
+    public function testScriptedTemplateDiagnosticsAreIncludedInEnvelope(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'hello' => ['greeting.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+        $ai->enableScriptedTemplates(true);
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello {= upper(input) }', 'reply.intent', []);
+
+        $envelope = $ai->processInputEnvelope('hello');
+
+        $this->assertSame('Hello HELLO', $envelope['response']);
+        $this->assertTrue($envelope['templates']['scripted']['enabled']);
+        $this->assertSame('upper(input)', $envelope['templates']['scripted']['blocks'][0]['expression']);
     public function testConversationFlowConstrainsRoutingAndAdvancesState(): void
     {
         $analyzer = new FakeAnalyzer([

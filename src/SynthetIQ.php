@@ -20,6 +20,7 @@ use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
+use BlueFission\SynthetIQ\Responses\ScriptedTemplateRenderer;
 use BlueFission\SynthetIQ\Audit\AuditTrail;
 use BlueFission\SynthetIQ\Policy\PolicyDecision;
 use BlueFission\SynthetIQ\Policy\PolicyFilterInterface;
@@ -203,6 +204,33 @@ class SynthetIQ
     {
         $this->_predictor = $predictor;
         $this->refreshResponseSelector();
+    }
+
+    public function enableScriptedTemplates(bool $enabled): void
+    {
+        if ($this->_responseGenerator instanceof Generator) {
+            $this->_responseGenerator->enableScriptedTemplates($enabled);
+        }
+    }
+
+    public function setScriptedTemplateRenderer(?ScriptedTemplateRenderer $renderer): void
+    {
+        if ($this->_responseGenerator instanceof Generator) {
+            $this->_responseGenerator->setScriptedTemplateRenderer($renderer);
+        }
+    }
+
+    public function scriptedTemplateDiagnostics(): array
+    {
+        if ($this->_responseGenerator instanceof Generator) {
+            return $this->_responseGenerator->scriptedTemplateDiagnostics();
+        }
+
+        return [
+            'enabled' => false,
+            'blocks' => [],
+            'errors' => [],
+        ];
     }
 
     public function responsePredictorDiagnostics(): array
@@ -884,6 +912,9 @@ class SynthetIQ
                 'corrected' => $corrected,
             ],
             'predictor' => Arr::is($predictor) ? $predictor : $this->responsePredictorDiagnostics(),
+            'templates' => [
+                'scripted' => $this->scriptedTemplateDiagnostics(),
+            ],
         ];
     }
 

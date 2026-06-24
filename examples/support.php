@@ -11,9 +11,12 @@ use BlueFission\Automata\Language\Interpreter;
 use BlueFission\Automata\Language\StemmerLemmatizer;
 use BlueFission\Automata\Language\Walker;
 use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
+use BlueFission\Data\Directory;
 use BlueFission\Data\File;
+use BlueFission\Data\FileSystem;
 use BlueFission\Func;
 use BlueFission\Net\HTTP;
+use BlueFission\Num;
 use BlueFission\Str;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\SynthetIQ;
@@ -65,12 +68,40 @@ function synthetiq_example_config(): array
     ];
 }
 
+function synthetiq_example_directory(): Directory
+{
+    return new class(new FileSystem([
+        'root' => synthetiq_example_root(),
+        'filter' => [],
+        'doNotConfirm' => true,
+    ])) extends Directory {
+    };
+}
+
+function synthetiq_example_ensure_directory(string $dir): void
+{
+    $directory = synthetiq_example_directory();
+    if ($directory->exists($dir)) {
+        return;
+    }
+
+    $parent = dirname($dir);
+    if (!$directory->exists($parent)) {
+        synthetiq_example_ensure_directory($parent);
+    }
+
+    $filesystem = new FileSystem([
+        'root' => $parent,
+        'filter' => [],
+        'doNotConfirm' => true,
+    ]);
+    $filesystem->mkdir(basename($dir));
+}
+
 function synthetiq_example_model_dir(string $name = 'ml'): string
 {
     $dir = synthetiq_example_path('models/' . $name);
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
-    }
+    synthetiq_example_ensure_directory($dir);
 
     return $dir . DIRECTORY_SEPARATOR;
 }
@@ -154,7 +185,7 @@ function synthetiq_example_progress(bool $enabled = true): callable
             return;
         }
 
-        $percent = (int)round(($current / $total) * 100);
+        $percent = (int)Num::round(($current / $total) * 100);
         echo "\rTraining: {$current}/{$total} ({$percent}%)";
         if (Func::isCallable('flush')) {
             flush();

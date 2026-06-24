@@ -46,6 +46,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
 - `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
+- `Fallback\LocalModelFallbackResponder`: Optional provider-backed fallback with captured training candidates.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
@@ -73,6 +74,8 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Reliability: consistent output given the same inputs and context.
 - Speed: fast classification and selection for interactive chat.
 - Low cost: avoid heavy compute or external dependencies in the core path.
+- Fallback model execution stays optional and host-supplied; SynthetIQ owns the
+  candidate capture and review contract.
 
 ## Risks and Constraints
 

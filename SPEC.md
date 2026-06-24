@@ -73,8 +73,15 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Conversation state is configured through `State\ConversationState`, can be serialized/restored as an array, and is applied to the Automata context before routing and response generation.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.
-- Policy filters inspect input/output text and can deny or replace unsafe content. Audit records are structured arrays with optional redaction before storage or exposure.
-- Conversation scene contracts are array-based definitions with `id`, `voice_policy`, `public_safety`, `states`, optional `handoff` entries, and explicit transition targets.
+- Recalled memory episodes can influence routing through intent biases and can
+  be reported in the response envelope after response selection.
+
+### Memory Response Selection
+
+SynthetIQ normalizes related memory entries into `memory.selection`, including
+matched entries, selected response, selected response intent, recall metadata,
+and bounded counts. Memory storage, scope isolation, and permission guards
+remain adapter concerns.
 
 ### Conversation Scene Contract
 

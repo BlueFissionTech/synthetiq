@@ -120,6 +120,17 @@ php examples/optional_clients.php
 - `BlueFission\SynthetIQ\Memory\*`: pluggable short-term memory adapters.
 - `BlueFission\SynthetIQ\Fallback\*`: low-confidence fallback responders.
 
+## Memory Recall
+
+Memory adapters can bias intent routing and provide response-selection context.
+`processInputEnvelope()` includes recalled entries and a `memory.selection`
+summary showing which recalled episodes matched the selected response or
+response intent. Scope, permission checks, retrieval limits, and similarity
+thresholds remain adapter-owned.
+
+See `docs/memory-response-selection.md` for the envelope fields and adapter
+responsibilities.
+
 ## Routing and Templates
 
 Routes are built by registering statements for an intent label. Each statement becomes:

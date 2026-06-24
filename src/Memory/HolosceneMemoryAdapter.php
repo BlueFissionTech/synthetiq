@@ -8,8 +8,11 @@ use BlueFission\Automata\Language\Reader;
 use BlueFission\Automata\Memory\IWorkingMemory;
 use BlueFission\Automata\Intent\Intent;
 use BlueFission\DevElation as Dev;
+use BlueFission\Arr;
 use BlueFission\Collections\Collection;
+use BlueFission\Func;
 use BlueFission\Str;
+use BlueFission\Val;
 
 class HolosceneMemoryAdapter implements MemoryAdapterInterface
 {
@@ -41,7 +44,7 @@ class HolosceneMemoryAdapter implements MemoryAdapterInterface
         if (isset($options['default_scope'])) {
             $this->defaultScope = (string)$options['default_scope'];
         }
-        if (isset($options['permission_guard']) && is_callable($options['permission_guard'])) {
+        if (isset($options['permission_guard']) && Func::isCallable($options['permission_guard'])) {
             $this->permissionGuard = $options['permission_guard'];
         }
     }
@@ -82,7 +85,7 @@ class HolosceneMemoryAdapter implements MemoryAdapterInterface
             return new MemoryRecall();
         }
 
-        if (!method_exists($this->memory, 'recallSimilar')) {
+        if (!Func::isCallable([$this->memory, 'recallSimilar'])) {
             return new MemoryRecall();
         }
 
@@ -117,8 +120,22 @@ class HolosceneMemoryAdapter implements MemoryAdapterInterface
             }
         }
 
-        if (!empty($intentBiases)) {
-            arsort($intentBiases);
+        if (Val::isNotEmpty($intentBiases)) {
+            $pairs = [];
+            foreach ($intentBiases as $label => $weight) {
+                $pairs[] = [
+                    'label' => $label,
+                    'weight' => $weight,
+                ];
+            }
+
+            $intentBiases = [];
+            $pairs = Arr::make($pairs)->sort(function ($left, $right) {
+                return $right['weight'] <=> $left['weight'];
+            })->toArray();
+            foreach ($pairs as $pair) {
+                $intentBiases[$pair['label']] = $pair['weight'];
+            }
         }
 
         $recall = new MemoryRecall($results, $intentBiases, ['scope' => $scope]);
@@ -157,7 +174,7 @@ class HolosceneMemoryAdapter implements MemoryAdapterInterface
         $intent = $context->get('current_intent');
         if ($intent instanceof Intent) {
             $memoryContext->set('intent_label', $intent->getLabel());
-        } elseif (is_string($intent)) {
+        } elseif (Str::is($intent)) {
             $memoryContext->set('intent_label', $intent);
         }
 

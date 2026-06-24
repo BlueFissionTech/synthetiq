@@ -313,6 +313,98 @@ class SynthetIQTest extends TestCase
         $this->assertSame('greeting.intent', $envelope['intent']['label']);
         $this->assertSame([['input' => 'hello', 'response' => 'Hello there']], $envelope['memory']['related']);
         $this->assertSame(['greeting.intent' => 1.0], $envelope['memory']['intentBiases']);
+        $this->assertSame('reply.intent', $envelope['memory']['selection']['selected_intent']);
+        $this->assertSame(1, $envelope['memory']['selection']['related_count']);
+        $this->assertSame(1, $envelope['memory']['selection']['matched_count']);
+        $this->assertSame('hello', $envelope['memory']['selection']['matches'][0]['input']);
+    }
+
+    public function testMemoryRecallResponseContextSupportsContextEntries(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'remember' => [
+                'status.intent' => 0.4,
+                'greeting.intent' => 0.3,
+            ],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $entry = new Context();
+        $entry->set('input', 'hello');
+        $entry->set('response', 'Hello there');
+        $entry->set('intent_label', 'reply.intent');
+        $entry->set('scope', 'session-a');
+        $entry->set('user_id', 'user-a');
+        $entry->set('session_id', 'session-a');
+        $memory = new EnvelopeMemoryAdapter(new MemoryRecall(
+            [
+                'episode-a' => [
+                    'context' => $entry,
+                    'similarity' => 0.9,
+                ],
+            ],
+            ['greeting.intent' => 1.0],
+            ['scope' => 'session-a']
+        ));
+        $ai = new SynthetIQ($interpreter, $analyzer, null, $memory);
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello there', 'reply.intent', []);
+        $ai->addRoute('All good.', 'status.intent', []);
+
+        $envelope = $ai->processInputEnvelope('remember');
+
+        $this->assertSame('Hello there', $envelope['response']);
+        $this->assertSame(1, $envelope['memory']['selection']['related_count']);
+        $this->assertSame(1, $envelope['memory']['selection']['matched_count']);
+        $this->assertSame('episode-a', $envelope['memory']['selection']['matches'][0]['label']);
+        $this->assertSame('session-a', $envelope['memory']['selection']['matches'][0]['scope']);
+        $this->assertSame(['scope' => 'session-a'], $envelope['memory']['selection']['meta']);
+    }
+
+    public function testIrrelevantMemoryRecallDoesNotClaimSelectionMatch(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'status' => ['status.intent' => 1.0],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $memory = new EnvelopeMemoryAdapter(new MemoryRecall(
+            [
+                [
+                    'input' => 'hello',
+                    'response' => 'Hello there',
+                    'intent_label' => 'reply.intent',
+                ],
+            ],
+            [],
+            ['source' => 'test']
+        ));
+        $ai = new SynthetIQ($interpreter, $analyzer, null, $memory);
+
+        $ai->addRoute('All good.', 'status.intent', []);
+
+        $envelope = $ai->processInputEnvelope('status');
+
+        $this->assertSame('All good.', $envelope['response']);
+        $this->assertSame(1, $envelope['memory']['selection']['related_count']);
+        $this->assertSame(0, $envelope['memory']['selection']['matched_count']);
+        $this->assertSame([], $envelope['memory']['selection']['matches']);
+    }
+
+    public function testEmptyMemoryRecallKeepsEnvelopeSelectionEmpty(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'status' => ['status.intent' => 1.0],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $memory = new EnvelopeMemoryAdapter(new MemoryRecall());
+        $ai = new SynthetIQ($interpreter, $analyzer, null, $memory);
+
+        $ai->addRoute('All good.', 'status.intent', []);
+
+        $envelope = $ai->processInputEnvelope('status');
+
+        $this->assertSame('All good.', $envelope['response']);
+        $this->assertSame([], $envelope['memory']['selection']);
     }
 
     public function testProcessInputEnvelopeReportsCorrectedInput(): void

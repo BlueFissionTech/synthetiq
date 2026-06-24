@@ -26,7 +26,7 @@ Status legend: Implemented, Partial, Not implemented.
 - Language `Walker` integration for entity roles. (Not implemented)
 - Conversation state store (persona, mood, tone, task state). (Not implemented)
 - Scripted vibe templates using `{=...}` blocks. (Not implemented)
-- Retrieval of relevant prior turns for response selection. (Not implemented)
+- Retrieval of relevant prior turns for response selection. (Implemented)
 
 ## Phase 3 - Production Readiness
 
@@ -47,7 +47,7 @@ Status legend: Implemented, Partial, Not implemented.
 | Intent keyword boosts | Curated keywords per intent | Implemented |
 | Scripted vibe templates | `{=...}` execution blocks | Not implemented |
 | Spelling tolerance | Vocabulary edit-distance correction; phonetics and synonyms pending | Partial |
-| Short-term memory | Holoscene + ABS memory | Partial |
+| Short-term memory | Holoscene + ABS memory with response-selection context | Partial |
 | Context routing | Intent weighting by history | Partial |
 | Strategy ensemble | Matcher, keyword overlap, and optional Naive Bayes scoring | Partial |
 | LLM fallback | Mini quantized LLM for unknown intent | Partial |

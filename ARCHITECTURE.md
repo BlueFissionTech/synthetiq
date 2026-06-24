@@ -44,10 +44,13 @@ Automata and Develation for language, memory, and orchestration primitives.
      metadata, and turn summaries to `Context` before each turn.
 10. **Memory hooks**
    - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
+   - Recalled episodes are normalized into response-selection context after a
+     response is selected.
 11. **Route-state lifecycle**
+12. **Route-state lifecycle**
    - `RouteTrainer` compiles, saves, validates, and applies cached route
      catalogs for offline preparation.
-12. **Conversation scene contracts**
+13. **Conversation scene contracts**
    - `Scenes\SceneContract` validates authored scene definitions for prompts,
      choices, fallback behavior, voice policy, public-safety constraints, and
      handoff metadata.
@@ -70,7 +73,7 @@ and large-scale retrieval pipelines. SynthetIQ currently lacks:
 
 - Large, diverse training corpora and retrieval pipelines.
 - Full multi-turn flow graphs with slots, completion, and cancellation.
-- Robust response-time use of recalled memory episodes and entity metadata.
+- Entity metadata enrichment for recalled memory episodes.
 - Dynamic persona or mood state for consistent voice.
 - Phonetic and synonym-aware normalization beyond vocabulary edit distance.
 - Production safety filters and audit-log policy gates.
@@ -95,6 +98,8 @@ and large-scale retrieval pipelines. SynthetIQ currently lacks:
   - store recent dialog episodes,
   - retrieve relevant episodes by similarity,
   - weight intents and responses based on memory recall.
+- Keep storage, scope isolation, permission guards, thresholds, and limits owned
+  by memory adapters before they return a `MemoryRecall`.
 - Use Language `Walker` to attach parsed entities and grammatical roles to the
   memory graph for richer context routing.
 

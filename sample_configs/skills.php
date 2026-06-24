@@ -11,6 +11,7 @@ use BlueFission\SynthetIQ\Skills\HowAreYouResponseSkill;
 use BlueFission\SynthetIQ\Skills\TimeAndDateSkill;
 use BlueFission\SynthetIQ\Skills\WeatherSkill;
 use BlueFission\SynthetIQ\Skills\NewsSkill;
+use BlueFission\SynthetIQ\Clients\ClientResolver;
 use BlueFission\SynthetIQ\Clients\LocationClientInterface;
 use BlueFission\SynthetIQ\Clients\NewsClientInterface;
 use BlueFission\SynthetIQ\Clients\WeatherClientInterface;
@@ -22,19 +23,10 @@ if (!is_dir($modelDir)) {
 
 $matcher = new Matcher(new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir));
 
-$clientBindings = require __DIR__ . '/clients.php';
-$clientInstances = [];
-foreach ($clientBindings as $interface => $class) {
-    if (strpos($class, 'OpenWeatherClient') !== false && !function_exists('env')) {
-        continue;
-    }
-    if (class_exists($class)) {
-        $clientInstances[$interface] = new $class();
-    }
-}
-$locationClient = $clientInstances[LocationClientInterface::class] ?? null;
-$weatherClient = $clientInstances[WeatherClientInterface::class] ?? null;
-$newsClient = $clientInstances[NewsClientInterface::class] ?? null;
+$clientResolver = ClientResolver::make(require __DIR__ . '/clients.php');
+$locationClient = $clientResolver->client(LocationClientInterface::class);
+$weatherClient = $clientResolver->client(WeatherClientInterface::class);
+$newsClient = $clientResolver->client(NewsClientInterface::class);
 
 $greetingIntent = new Intent('greeting.response', 'Greeting Response', [
     'keywords' => [
@@ -145,11 +137,11 @@ $weatherIntent = new Intent('weather.response', 'Weather Response', [
     ],
 ]);
 
-// $weatherSkill = new WeatherSkill($weatherClient, $locationClient);
+$weatherSkill = new WeatherSkill($weatherClient, $locationClient);
 $matcher
-    // ->registerSkill($weatherSkill)
-    ->registerIntent($weatherIntent);
-    // ->associate($weatherIntent, $weatherSkill);
+    ->registerSkill($weatherSkill)
+    ->registerIntent($weatherIntent)
+    ->associate($weatherIntent, $weatherSkill);
 
 // NewsSkill
 $newsIntent = new Intent('news.response', 'News Response', [
@@ -167,11 +159,11 @@ $newsIntent = new Intent('news.response', 'News Response', [
     ],
 ]);
 
-// $newsSkill = new NewsSkill($newsClient, $locationClient);
+$newsSkill = new NewsSkill($newsClient, $locationClient);
 $matcher
-    // ->registerSkill($newsSkill)
-    ->registerIntent($newsIntent);
-    // ->associate($newsIntent, $newsSkill);
+    ->registerSkill($newsSkill)
+    ->registerIntent($newsIntent)
+    ->associate($newsIntent, $newsSkill);
 
 // ReminderSkill
 $reminderIntent = new Intent('reminder.response', 'Reminder Response', [

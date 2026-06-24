@@ -5,6 +5,9 @@ use BlueFission\Automata\Context;
 use BlueFission\Automata\Intent\Skill\BaseSkill;
 use BlueFission\SynthetIQ\Clients\LocationClientInterface;
 use BlueFission\SynthetIQ\Clients\NewsClientInterface;
+use BlueFission\Arr;
+use BlueFission\Str;
+use BlueFission\Val;
 
 class NewsSkill extends BaseSkill
 {
@@ -21,8 +24,8 @@ class NewsSkill extends BaseSkill
 
     public function execute(Context $context = null)
     {
-        $topic = $context->get('topic') ?? 'Technology';
-        $location = $context->get('location');
+        $topic = $context ? (string)($context->get('topic') ?? 'Technology') : 'Technology';
+        $location = $context ? (string)($context->get('location') ?? '') : '';
         $news = $this->news_client;
         $loc = $this->location_client;
 
@@ -31,7 +34,7 @@ class NewsSkill extends BaseSkill
             return $this->response;
         }
 
-        if (empty($location)) {
+        if (Val::isEmpty($location)) {
             $location = $loc ? $loc->getIpLocation() : '';
         }
 
@@ -41,11 +44,17 @@ class NewsSkill extends BaseSkill
 
     public function response(): string
     {
-        if (empty($this->response)) {
+        if (!Arr::is($this->response) || Val::isEmpty($this->response)) {
             return "No news found.";
         }
 
-        $headlines = implode("\n", $this->response);
+        $headlines = '';
+        foreach ($this->response as $headline) {
+            $headlines = Val::isEmpty($headlines)
+                ? (string)$headline
+                : Str::make($headlines)->append("\n")->append((string)$headline)->val();
+        }
+
         return "Here are the latest news headlines:\n\n{$headlines}";
     }
 }

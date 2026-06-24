@@ -1,118 +1,35 @@
 <?php
 
-use BlueFission\SynthetIQ\SynthetIQ;
-use BlueFission\Automata\Language\{
-    Interpreter,
-    Grammar,
-    StemmerLemmatizer,
-    Documenter,
-    Walker
-};
-use BlueFission\Automata\Analysis\KeywordTopicAnalyzer;
-use BlueFission\Automata\Strategy\NaiveBayesTextClassification;
+declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../sample_configs/skills.php';
+use BlueFission\Str;
+use BlueFission\Val;
 
-$dialogue = require __DIR__ . '/../sample_configs/dialogue.php';
-$intentBoosts = require __DIR__ . '/../sample_configs/intent_boosts.php';
-$grammar = require __DIR__ . '/../sample_configs/grammar.php';
-$tokens = require __DIR__ . '/../sample_configs/tokens.php';
-$documenter = require __DIR__ . '/../sample_configs/documenter.php';
+require __DIR__ . '/support.php';
 
-$modelDir = __DIR__ . '/../models/ml/';
-if (!is_dir($modelDir)) {
-    mkdir($modelDir, 0777, true);
-}
-
-$interpreter = new Interpreter(
-    new Grammar(
-        new StemmerLemmatizer(),
-        $grammar['rules'],
-        $grammar['commands'],
-        $tokens
-    ),
-    $documenter,
-    new Walker()
-);
-
-$analyzer = new KeywordTopicAnalyzer(new NaiveBayesTextClassification, $modelDir);
-$ai = new SynthetIQ($interpreter, $analyzer);
-
-function normalizeKeywords(array $keywords, array $exclude = []): array
-{
-    $excludeSet = [];
-    foreach ($exclude as $value) {
-        $excludeSet[strtolower(trim((string)$value))] = true;
-    }
-
-    $normalized = [];
-    foreach ($keywords as $keyword) {
-        $keyword = strtolower(trim((string)$keyword));
-        if ($keyword === '' || isset($excludeSet[$keyword])) {
-            continue;
-        }
-        $normalized[$keyword] = true;
-    }
-
-    return array_keys($normalized);
-}
-
-function trainRoutes(SynthetIQ $ai, array $dialogue, array $intentBoosts = []): void
-{
-    $stopwords = ['how', 'what', 'is', 'the', 'a', 'an', 'to', 'for', 'on', 'in'];
-    $total = 0;
-    foreach ($dialogue as $info) {
-        $total += count($info[1]);
-    }
-
-    $current = 0;
-    foreach ($dialogue as $category => $info) {
-        $boost = $intentBoosts[$category] ?? [];
-        $keywords = $info[2] ?? [];
-        if (!empty($boost['keywords'])) {
-            $keywords = array_merge($keywords, $boost['keywords']);
-        }
-        $exclude = $boost['exclude'] ?? [];
-        $keywords = normalizeKeywords($keywords, array_merge($stopwords, $exclude));
-        $priorityBase = $boost['priority'] ?? null;
-        $ai->addIntentKeywords($category, $keywords, $priorityBase);
-
-        foreach ($info[1] as $statement) {
-            $ai->addRoute($statement, $category, $info[0]);
-            $current++;
-            if ($current % 50 === 0 || $current === $total) {
-                $percent = (int)round(($current / $total) * 100);
-                echo "\rTraining: {$current}/{$total} ({$percent}%)";
-                if (function_exists('flush')) {
-                    flush();
-                }
-            }
-        }
-    }
-    echo "\rTraining: {$total}/{$total} (100%)\n";
-}
-
-trainRoutes($ai, $dialogue, $intentBoosts);
+$runtime = synthetiq_example_build(['progress' => true]);
+$ai = $runtime['ai'];
+$handle = fopen('php://stdin', 'r');
 
 echo "SynthetIQ CLI (type 'exit' to quit)\n";
 echo "----------------------------------\n";
 
 while (true) {
-    echo "You: ";
-    $handle = fopen("php://stdin", "r");
-    $userMessage = trim(fgets($handle));
+    echo 'You: ';
+    $userMessage = Str::make((string)fgets($handle))->trim()->val();
 
-    if (strtolower($userMessage) === 'exit') {
+    if (Val::isEmpty($userMessage)) {
+        continue;
+    }
+
+    if (Str::lower($userMessage) === 'exit') {
         echo "Goodbye!\n";
         break;
     }
 
-    try {
-        $response = $ai->processInput($userMessage);
-    } catch (Exception $e) {
-        $response = $e->getMessage();
-    }
-
-    echo "AI: " . $response . PHP_EOL;
+    $envelope = $ai->processInputEnvelope($userMessage);
+    echo 'AI: ' . (string)$envelope['response'] . PHP_EOL;
+    echo 'Intent: ' . (string)($envelope['intent']['label'] ?? 'unknown.intent') . PHP_EOL;
 }
+
+fclose($handle);

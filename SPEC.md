@@ -43,9 +43,14 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Responses\Generator`: Template-based response rendering.
 - `Responses\Selector`: Decision-tree selection with predictive scoring.
 - `ConversationHistory`: Stores past input/response pairs.
+- `Flow\ConversationFlow`: Defines multi-turn state graphs, allowed intents, transitions, fallback intent recovery, and completion/abandonment state.
+- `State\ConversationState`: Stores persona, tone, mood, task slots, session metadata, and turn summaries.
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
 - `Fallback\FallbackResponderInterface`: Allows deterministic or optional low-confidence fallback behavior.
+- `Policy\PolicyFilterInterface`: Allows deterministic input and output policy checks.
+- `Audit\AuditTrail`: Records structured policy decisions, intent scores, fallback triggers, memory recall, and response-selection metadata.
+- `Scenes\SceneContract`: Validates deterministic scene definitions for authored prompts, choices, fallback behavior, voice guidance, public-safety constraints, and handoff metadata.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
@@ -64,6 +69,8 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Routes are added via `SynthetIQ::addRoute($statement, $type, $to)`.
 - Templates are simple text strings with optional `{{input}}` substitutions.
 - Sample configuration is provided in `sample_configs/`.
+- Conversation flows are configured with a `start` state and `states` map. Active flow state can constrain route scoring to allowed intents and supply a configured recovery intent when input falls outside the expected state.
+- Conversation state is configured through `State\ConversationState`, can be serialized/restored as an array, and is applied to the Automata context before routing and response generation.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.
 - Recalled memory episodes can influence routing through intent biases and can
@@ -75,6 +82,23 @@ SynthetIQ normalizes related memory entries into `memory.selection`, including
 matched entries, selected response, selected response intent, recall metadata,
 and bounded counts. Memory storage, scope isolation, and permission guards
 remain adapter concerns.
+
+### Conversation Scene Contract
+
+Scene contracts define deterministic authored experiences without executing a
+runtime engine. A scene contains:
+
+- `voice_policy`: tone, allowed guidance, and avoided behaviors.
+- `public_safety`: constraints plus escalation or handoff rules.
+- `states`: dialogue, decision, and handoff states.
+- `choices`: labelled transitions from one state to another.
+- `fallback`: prompt and optional transition for unsupported input.
+- `handoff`: metadata the host runtime can use for review or intake.
+
+SynthetIQ owns validation and sample scene data. Automata can provide upstream
+orchestration/context surfaces when a runtime executes a scene, and Vibe-authored
+artifacts can generate compatible scene definitions. Hosts own persistence,
+permissions, review workflow, transport, and handoff execution.
 
 ## Quality Targets
 

@@ -31,16 +31,29 @@ Automata and Develation for language, memory, and orchestration primitives.
      fallback paths.
    - Response envelopes expose intent, score, fallback, memory, correction, and
      predictor diagnostics.
+   - Policy filters can deny input/output content, and the audit trail records
+     policy decisions plus turn-level diagnostics.
 7. **History & context**
    - `ConversationHistory` stores input/response pairs. `Context` holds the
      last and current intent.
-8. **Memory hooks**
+8. **Conversation flow graphs**
+   - `Flow\ConversationFlow` can constrain intent scores by active flow state,
+     advance by selected intent, and report completion or abandonment.
+9. **Memory hooks**
+   - `State\ConversationState` applies persona, tone, mood, task slots, session
+     metadata, and turn summaries to `Context` before each turn.
+10. **Memory hooks**
    - `MemoryAdapterInterface` enables Holoscene/ABS-backed short-term memory.
    - Recalled episodes are normalized into response-selection context after a
      response is selected.
-9. **Route-state lifecycle**
+11. **Route-state lifecycle**
+12. **Route-state lifecycle**
    - `RouteTrainer` compiles, saves, validates, and applies cached route
      catalogs for offline preparation.
+13. **Conversation scene contracts**
+   - `Scenes\SceneContract` validates authored scene definitions for prompts,
+     choices, fallback behavior, voice policy, public-safety constraints, and
+     handoff metadata.
 
 ## Data Surfaces
 
@@ -48,6 +61,10 @@ Automata and Develation for language, memory, and orchestration primitives.
 - `sample_configs/skills.php` registers Automata intents/skills.
 - `sample_configs/intent_boosts.php` provides curated intent keyword boosts.
 - `sample_configs/eval_cases.php` provides evaluator cases.
+- `sample_configs/conversation_flow.php` provides a multi-turn flow graph example.
+- `sample_configs/conversation_state.php` provides a serializable state-store example.
+- `sample_configs/conversation_scenes.php` provides deterministic scene
+  contract examples.
 
 ## Why It Does Not Match SmarterChild or Tay
 
@@ -122,4 +139,5 @@ while storing approved results as new training data. The router must:
   - selected routes,
   - memory retrieval hits,
   - fallback triggers.
+  - policy decisions and redacted audit payloads.
 

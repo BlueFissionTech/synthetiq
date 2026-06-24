@@ -41,6 +41,10 @@ Automata and Develation for language, memory, and orchestration primitives.
 9. **Route-state lifecycle**
    - `RouteTrainer` compiles, saves, validates, and applies cached route
      catalogs for offline preparation.
+10. **Conversation scene contracts**
+   - `Scenes\SceneContract` validates authored scene definitions for prompts,
+     choices, fallback behavior, voice policy, public-safety constraints, and
+     handoff metadata.
 
 ## Data Surfaces
 
@@ -49,6 +53,8 @@ Automata and Develation for language, memory, and orchestration primitives.
 - `sample_configs/intent_boosts.php` provides curated intent keyword boosts.
 - `sample_configs/eval_cases.php` provides evaluator cases.
 - `sample_configs/conversation_state.php` provides a serializable state-store example.
+- `sample_configs/conversation_scenes.php` provides deterministic scene
+  contract examples.
 
 ## Why It Does Not Match SmarterChild or Tay
 

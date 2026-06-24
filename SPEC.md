@@ -43,6 +43,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Responses\Generator`: Template-based response rendering.
 - `Responses\Selector`: Decision-tree selection with predictive scoring.
 - `ConversationHistory`: Stores past input/response pairs.
+- `Flow\ConversationFlow`: Defines multi-turn state graphs, allowed intents, transitions, fallback intent recovery, and completion/abandonment state.
 - `State\ConversationState`: Stores persona, tone, mood, task slots, session metadata, and turn summaries.
 - `Skills\*`: Optional Automata skills for specific behaviors.
 - `Training\RouteTrainer`: Compiles, saves, validates, and applies route-state catalogs.
@@ -66,6 +67,7 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Routes are added via `SynthetIQ::addRoute($statement, $type, $to)`.
 - Templates are simple text strings with optional `{{input}}` substitutions.
 - Sample configuration is provided in `sample_configs/`.
+- Conversation flows are configured with a `start` state and `states` map. Active flow state can constrain route scoring to allowed intents and supply a configured recovery intent when input falls outside the expected state.
 - Conversation state is configured through `State\ConversationState`, can be serialized/restored as an array, and is applied to the Automata context before routing and response generation.
 - Route catalogs can be compiled and applied through `RouteTrainer`.
 - Response predictor diagnostics and response envelopes are public contracts for observability.

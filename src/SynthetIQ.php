@@ -20,6 +20,7 @@ use BlueFission\SynthetIQ\Memory\NullMemoryAdapter;
 use BlueFission\SynthetIQ\Memory\MemoryRecall;
 use BlueFission\SynthetIQ\Fallback\FallbackResponderInterface;
 use BlueFission\SynthetIQ\Fallback\NullFallbackResponder;
+use BlueFission\SynthetIQ\Flow\ConversationFlow;
 use BlueFission\SynthetIQ\State\ConversationState;
 use BlueFission\Arr;
 use BlueFission\Func;
@@ -44,6 +45,7 @@ class SynthetIQ
     protected $_learningModel;
     protected $_memoryAdapter;
     protected $_fallbackResponder;
+    protected $_conversationFlow;
     protected $_conversationState;
     protected $_confidenceThreshold = 0.35;
     protected $_spellCorrector;
@@ -70,6 +72,7 @@ class SynthetIQ
         $this->_learningModel = $learningModel ?? new LearningModel();
         $this->_memoryAdapter = $memoryAdapter ?? new NullMemoryAdapter();
         $this->_fallbackResponder = $fallbackResponder ?? new NullFallbackResponder();
+        $this->_conversationFlow = null;
         $this->_conversationState = new ConversationState();
         $this->_spellCorrector = new SpellCorrector();
         if ($confidenceThreshold !== null) {
@@ -90,6 +93,39 @@ class SynthetIQ
         $this->_fallbackResponder = $responder ?? new NullFallbackResponder();
     }
 
+    public function setConversationFlow(?ConversationFlow $flow): void
+    {
+        $this->_conversationFlow = $flow;
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    public function conversationFlow(): ?ConversationFlow
+    {
+        return $this->_conversationFlow;
+    }
+
+    public function resetConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->reset();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function abandonConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->abandon();
+            $this->recordConversationFlowDiagnostics();
+        }
+    }
+
+    public function completeConversationFlow(): void
+    {
+        if ($this->_conversationFlow) {
+            $this->_conversationFlow->complete();
+            $this->recordConversationFlowDiagnostics();
+        }
     public function conversationState(): ConversationState
     {
         return $this->_conversationState;
@@ -180,6 +216,7 @@ class SynthetIQ
         if ($memoryRecall) {
             $scores = $this->applyIntentBiases($scores, $memoryRecall->intentBiases());
         }
+        $scores = $this->applyConversationFlow($scores);
 
         $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
         $confidence = $this->computeConfidence($scores);
@@ -206,6 +243,7 @@ class SynthetIQ
             $response = $fallbackResponse;
             $this->_history->addEntry($input, $response);
             $this->_context->set('last_intent', $intent);
+            $this->advanceConversationFlow($intent);
             $this->recordConversationStateTurn($intent, $response);
             if ($this->_learningModel) {
                 $this->_learningModel->observe($input, $response, $this->_context);
@@ -277,6 +315,7 @@ class SynthetIQ
 
         $this->_history->addEntry($input, $response);
         $this->_context->set('last_intent', $intent);
+        $this->advanceConversationFlow($intent);
         $this->recordConversationStateTurn($intent, $response);
         if ($this->_learningModel) {
             $this->_learningModel->observe($input, $response, $this->_context);
@@ -439,6 +478,7 @@ class SynthetIQ
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
+        $this->recordConversationFlowDiagnostics();
     }
 
     protected function applyConversationState(): void
@@ -464,6 +504,36 @@ class SynthetIQ
         }
 
         $this->_spellCorrector->addText((string)$terms);
+    }
+
+    protected function applyConversationFlow(?Arr $scores): ?Arr
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return $scores;
+        }
+
+        $constrained = $this->_conversationFlow->constrainScores($scores);
+        $this->recordConversationFlowDiagnostics();
+
+        return $constrained;
+    }
+
+    protected function advanceConversationFlow(?Intent $intent): void
+    {
+        if (!$this->_conversationFlow instanceof ConversationFlow) {
+            return;
+        }
+
+        $this->_conversationFlow->advance($intent ? $intent->getLabel() : null);
+        $this->recordConversationFlowDiagnostics();
+    }
+
+    protected function recordConversationFlowDiagnostics(): void
+    {
+        $this->_context->set(
+            'conversation_flow',
+            $this->_conversationFlow instanceof ConversationFlow ? $this->_conversationFlow->diagnostics() : []
+        );
     }
 
     protected function determineFallbackReason(?Intent $intent, ?Arr $scores, float $confidence, bool $allowLowConfidence): ?string
@@ -654,6 +724,7 @@ class SynthetIQ
                 'reason' => $this->_context->get('fallback_reason'),
             ],
             'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
+            'flow' => $this->arrayContextValue('conversation_flow'),
             'state' => $this->_conversationState->toArray(),
             'correction' => [
                 'applied' => Str::is($original) && Str::is($corrected) && $original !== $corrected,

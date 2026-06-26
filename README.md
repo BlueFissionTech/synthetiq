@@ -237,12 +237,16 @@ $result = $ai->processInputEnvelope('hello');
 
 echo $result['response'];
 $intent = $result['intent']['label'];
+$responseRoute = $result['response_route']['label'];
 $predictor = $result['predictor']['status'];
 ```
 
-The envelope includes the response text, raw and normalized input, selected
-intent label, confidence, score map, fallback state, memory recall summary,
-correction metadata, and response predictor diagnostics.
+The envelope includes the response text, raw and normalized input, classified
+intent label, confidence, score map, selected response route, fallback state,
+memory recall summary, correction metadata, and response predictor diagnostics.
+
+Use `classifyInput()` when evaluating or tooling only needs the classified
+intent and should not generate a response or append to conversation history.
 
 ## Scripted Template Blocks
 

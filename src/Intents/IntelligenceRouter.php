@@ -244,11 +244,12 @@ class IntelligenceRouter extends Classifier
             $raw = $strategy->predict($input);
             $scores = $this->normalizeScores($raw);
             $scoreData = $scores instanceof Arr ? $scores->toArray() : [];
+            $normalizedData = $this->normalizeStrategyScores($scoreData);
             $weight = $this->strategyWeight($name, $strategy);
             $threshold = (float)($this->_strategyThresholds[$name] ?? 0.0);
             $accepted = [];
 
-            foreach ($scoreData as $label => $score) {
+            foreach ($normalizedData as $label => $score) {
                 if (!Num::is($score)) {
                     continue;
                 }
@@ -268,6 +269,7 @@ class IntelligenceRouter extends Classifier
                 'threshold' => $threshold,
                 'accuracy' => $strategy->accuracy(),
                 'scores' => $scoreData,
+                'normalized' => $normalizedData,
                 'accepted' => $accepted,
             ];
         }
@@ -283,6 +285,31 @@ class IntelligenceRouter extends Classifier
         Dev::do('synthetiq.intent.router.ensemble_scored', $diagnostics);
 
         return Val::isEmpty($combined) ? null : Arr::make($combined);
+    }
+
+    protected function normalizeStrategyScores(array $scores): array
+    {
+        $max = 0.0;
+        foreach ($scores as $score) {
+            if (Num::is($score)) {
+                $max = Num::max($max, (float)$score);
+            }
+        }
+
+        if ($max <= 0.0) {
+            return $scores;
+        }
+
+        $normalized = [];
+        foreach ($scores as $label => $score) {
+            if (!Num::is($score)) {
+                continue;
+            }
+
+            $normalized[(string)$label] = (float)$score / $max;
+        }
+
+        return $normalized;
     }
 
     protected function strategyWeight(string $name, IStrategy $strategy): float

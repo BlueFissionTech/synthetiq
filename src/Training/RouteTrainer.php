@@ -7,7 +7,9 @@ namespace BlueFission\SynthetIQ\Training;
 use BlueFission\SynthetIQ\SynthetIQ;
 use BlueFission\Arr;
 use BlueFission\Collections\Collection;
+use BlueFission\Data\Directory;
 use BlueFission\Data\File;
+use BlueFission\Data\FileSystem;
 use BlueFission\Func;
 use BlueFission\Net\HTTP;
 use BlueFission\Num;
@@ -55,6 +57,7 @@ class RouteTrainer
 
             $keywords = Arr::is($info['keywords'] ?? null) ? $info['keywords'] : [];
             $priorityBase = Val::is($info['priority'] ?? null) && Num::is($info['priority']) ? (int)$info['priority'] : null;
+            $trainStatements = (bool)($info['train_statements'] ?? true);
 
             if (Val::isNotEmpty($keywords)) {
                 $ai->addIntentKeywords($category, $keywords, $priorityBase);
@@ -77,7 +80,11 @@ class RouteTrainer
                     continue;
                 }
 
-                $ai->addRoute($statement, $category, $targets);
+                if ($trainStatements) {
+                    $ai->addRoute($statement, $category, $targets);
+                } else {
+                    $ai->addResponseTemplate($statement, $category);
+                }
                 $current++;
 
                 self::emit($progress, [
@@ -123,12 +130,14 @@ class RouteTrainer
             $statements = self::normalizeStringList(Arr::is($info[1] ?? null) ? $info[1] : []);
             $keywords = self::keywordsForIntent($info, $boost);
             $priorityBase = Val::is($boost['priority'] ?? null) && Num::is($boost['priority']) ? (int)$boost['priority'] : null;
+            $trainStatements = ($boost['train_statements'] ?? true) !== false;
 
             $intents[$category] = [
                 'targets' => self::normalizeTargets($info[0] ?? []),
                 'statements' => $statements,
                 'keywords' => $keywords,
                 'priority' => $priorityBase,
+                'train_statements' => $trainStatements,
             ];
 
             $routeCount += Arr::count($statements);
@@ -157,8 +166,8 @@ class RouteTrainer
     {
         self::assertValidState($state);
 
-        $directory = dirname($path);
-        if (Val::isNotEmpty($directory) && !is_dir($directory)) {
+        $directory = self::stateDirectory($path);
+        if (Val::isNotEmpty($directory) && !self::directoryExists($directory)) {
             mkdir($directory, 0777, true);
         }
 
@@ -167,7 +176,7 @@ class RouteTrainer
             throw new RuntimeException('Unable to encode route training state.');
         }
 
-        file_put_contents($path, $payload);
+        self::writeFileContents($path, $payload);
     }
 
     /**
@@ -179,8 +188,8 @@ class RouteTrainer
             throw new RuntimeException("Route training state not found: {$path}");
         }
 
-        $contents = file_get_contents($path);
-        $state = HTTP::jsonDecode((string)$contents, true, []);
+        $contents = self::readFileContents($path);
+        $state = HTTP::jsonDecode($contents, true, []);
         if (!Arr::is($state)) {
             throw new RuntimeException("Route training state is not valid JSON: {$path}");
         }
@@ -390,6 +399,49 @@ class RouteTrainer
             return true;
         }
 
-        return Arr::keys($value) === range(0, Arr::count($value) - 1);
+        $index = 0;
+        foreach (Arr::keys($value) as $key) {
+            if ($key !== $index) {
+                return false;
+            }
+
+            $index++;
+        }
+
+        return true;
+    }
+
+    protected static function stateDirectory(string $path): string
+    {
+        return dirname($path);
+    }
+
+    protected static function directoryExists(string $path): bool
+    {
+        $directory = new class(new FileSystem(['filter' => []])) extends Directory {};
+
+        return $directory->exists($path);
+    }
+
+    protected static function readFileContents(string $path): string
+    {
+        $fileSystem = new FileSystem(['mode' => 'r', 'filter' => []]);
+        $fileSystem->open($path);
+        $fileSystem->read();
+        $contents = $fileSystem->contents();
+
+        return Str::is($contents) ? $contents : '';
+    }
+
+    protected static function writeFileContents(string $path, string $contents): void
+    {
+        $fileSystem = new FileSystem(['mode' => 'w', 'filter' => []]);
+        $fileSystem->open($path);
+        $fileSystem->contents($contents);
+        $fileSystem->write();
+
+        if (!(new File())->exists($path)) {
+            throw new RuntimeException("Route training state could not be written: {$path}");
+        }
     }
 }

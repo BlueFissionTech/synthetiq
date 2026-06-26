@@ -26,7 +26,11 @@ use BlueFission\Val;
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 $synthetiqExampleSkills = dirname(__DIR__) . '/sample_configs/skills.php';
-if ((new File())->exists($synthetiqExampleSkills)) {
+$synthetiqLoadSkills = Str::lower((string)(getenv('SYNTHETIQ_EXAMPLE_LOAD_SKILLS') ?: ''));
+if (
+    Arr::hasKey(['1' => true, 'true' => true, 'yes' => true], $synthetiqLoadSkills)
+    && (new File())->exists($synthetiqExampleSkills)
+) {
     require_once $synthetiqExampleSkills;
 }
 

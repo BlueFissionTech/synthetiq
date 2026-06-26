@@ -49,6 +49,29 @@ class SynthetIQTest extends TestCase
         $this->assertSame('Hello there', $entry['response']);
     }
 
+    public function testClassifiesInputWithoutGeneratingResponse(): void
+    {
+        $analyzer = new FakeAnalyzer([
+            'hello' => ['greeting.intent' => 1],
+        ]);
+        $interpreter = new FakeInterpreter();
+        $ai = new SynthetIQ($interpreter, $analyzer);
+
+        $ai->addRoute('hello', 'greeting.intent', ['reply.intent']);
+        $ai->addRoute('Hello there', 'reply.intent', []);
+
+        $intent = $ai->classifyInput('hello');
+
+        $this->assertNotNull($intent);
+        $this->assertSame('greeting.intent', $intent->getLabel());
+
+        $context = $this->readProperty($ai, '_context');
+        $this->assertSame('greeting.intent', $context->get('classified_intent_label'));
+
+        $history = $this->readProperty($ai, '_history');
+        $this->assertSame(0, $history->getHistory()->count());
+    }
+
     public function testFallsBackToIntentTemplatesWhenNoRoutes(): void
     {
         $analyzer = new FakeAnalyzer([
@@ -237,8 +260,10 @@ class SynthetIQTest extends TestCase
         $this->assertSame('Hello there', $envelope['response']);
         $this->assertSame('hello', $envelope['input']['raw']);
         $this->assertSame('hello', $envelope['input']['normalized']);
-        $this->assertSame('reply.intent', $envelope['intent']['label']);
-        $this->assertArrayHasKey('reply.intent', $envelope['intent']['scores']);
+        $this->assertSame('greeting.intent', $envelope['intent']['label']);
+        $this->assertArrayHasKey('greeting.intent', $envelope['intent']['scores']);
+        $this->assertSame('reply.intent', $envelope['response_route']['label']);
+        $this->assertArrayHasKey('reply.intent', $envelope['response_route']['scores']);
         $this->assertFalse($envelope['fallback']['used']);
         $this->assertSame('available', $envelope['predictor']['status']);
     }
@@ -469,7 +494,8 @@ class SynthetIQTest extends TestCase
         $first = $ai->processInputEnvelope('ship');
 
         $this->assertSame('Shipping selected.', $first['response']);
-        $this->assertSame('shipping.reply', $first['intent']['label']);
+        $this->assertSame('shipping.intent', $first['intent']['label']);
+        $this->assertSame('shipping.reply', $first['response_route']['label']);
         $this->assertSame('shipping_details', $first['flow']['current_state']);
         $this->assertSame('active', $first['flow']['status']);
         $this->assertSame('shipping.intent', $first['flow']['last_transition']['intent']);
@@ -504,7 +530,8 @@ class SynthetIQTest extends TestCase
         $envelope = $ai->processInputEnvelope('unknown');
 
         $this->assertSame('Please choose shipping or account.', $envelope['response']);
-        $this->assertSame('recovery.reply', $envelope['intent']['label']);
+        $this->assertSame('flow.recovery.intent', $envelope['intent']['label']);
+        $this->assertSame('recovery.reply', $envelope['response_route']['label']);
         $this->assertSame('choose_topic', $envelope['flow']['current_state']);
         $this->assertSame('flow.recovery.intent', $envelope['flow']['last_transition']['intent']);
         $this->assertTrue((bool)$envelope['flow']['last_transition']['fallback']);

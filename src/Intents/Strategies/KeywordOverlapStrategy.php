@@ -13,7 +13,30 @@ use BlueFission\DevElation as Dev;
 
 class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInterface
 {
+    protected const STOPWORDS = [
+        'a' => true,
+        'an' => true,
+        'and' => true,
+        'are' => true,
+        'can' => true,
+        'do' => true,
+        'for' => true,
+        'i' => true,
+        'in' => true,
+        'is' => true,
+        'it' => true,
+        'me' => true,
+        'of' => true,
+        'on' => true,
+        'the' => true,
+        'to' => true,
+        'what' => true,
+        'you' => true,
+        'your' => true,
+    ];
+
     protected array $_keywordsByLabel = [];
+    protected array $_phrasesByLabel = [];
     protected float $_accuracy = 0.0;
 
     public function setContext(Context $context): void
@@ -27,6 +50,7 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
         $labels = Dev::apply('synthetiq.intent.strategy.overlap.train.labels', $labels);
 
         $this->_keywordsByLabel = $this->buildKeywordMap($samples, $labels);
+        $this->_phrasesByLabel = $this->buildPhraseMap($samples, $labels);
         $this->_accuracy = $this->evaluateAccuracy($samples, $labels, $testSize);
 
         Dev::do('synthetiq.intent.strategy.overlap.trained', [
@@ -38,12 +62,44 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
     public function predict($input)
     {
         $input = Dev::apply('synthetiq.intent.strategy.overlap.predict.input', $input);
-        $tokens = $this->tokenize((string)$input);
+        $normalizedInput = $this->normalizeText((string)$input);
+        $tokens = $this->tokenize($normalizedInput);
 
         $scores = [];
-        foreach ($this->_keywordsByLabel as $label => $keywords) {
+        $labels = Arr::unique(Arr::merge(Arr::keys($this->_keywordsByLabel), Arr::keys($this->_phrasesByLabel)));
+        foreach ($labels as $label) {
+            $label = (string)$label;
+            $score = 0.0;
+            $phrases = Arr::is($this->_phrasesByLabel[$label] ?? null) ? $this->_phrasesByLabel[$label] : [];
+            foreach ($phrases as $phrase) {
+                $phrase = (string)$phrase;
+                $phraseTokens = $this->tokenize($phrase);
+                if (Val::isEmpty($phraseTokens)) {
+                    continue;
+                }
+
+                if ($phrase === $normalizedInput) {
+                    $score += 10.0 + Arr::count($phraseTokens);
+                    continue;
+                }
+
+                if (Arr::count($phraseTokens) > 1 && Str::contains($normalizedInput, $phrase)) {
+                    $score += 5.0 + Arr::count($phraseTokens);
+                }
+
+                $shared = Arr::count(Arr::intersect($tokens, $phraseTokens));
+                if ($shared > 0) {
+                    $score += $shared / Arr::count($phraseTokens);
+                }
+            }
+
+            $keywords = Arr::is($this->_keywordsByLabel[$label] ?? null) ? $this->_keywordsByLabel[$label] : [];
             $shared = Arr::intersect($tokens, $keywords);
-            $scores[$label] = Arr::count($shared);
+            $score += Arr::count($shared);
+
+            if ($score > 0.0) {
+                $scores[$label] = $score;
+            }
         }
 
         if (Val::isNotEmpty($scores)) {
@@ -134,21 +190,56 @@ class KeywordOverlapStrategy extends Strategy implements ContextAwareStrategyInt
         return $map;
     }
 
+    protected function buildPhraseMap(array $samples, array $labels): array
+    {
+        $map = [];
+        $count = (int)Num::min(Arr::count($samples), Arr::count($labels));
+
+        for ($i = 0; $i < $count; $i++) {
+            $label = (string)$labels[$i];
+            $sample = $this->normalizeText((string)$samples[$i]);
+            if (Val::isEmpty($sample)) {
+                continue;
+            }
+
+            if (!Arr::hasKey($map, $label)) {
+                $map[$label] = [];
+            }
+
+            $map[$label][] = $sample;
+        }
+
+        foreach ($map as $label => $phrases) {
+            $map[$label] = Arr::unique($phrases);
+        }
+
+        return $map;
+    }
+
     protected function tokenize(string $input): array
     {
-        $input = Str::make($input)->trim()->lower()->val();
+        $input = $this->normalizeText($input);
         if (Val::isEmpty($input)) {
             return [];
         }
 
-        $tokens = Str::split($input, ' ');
+        $tokens = preg_split('/\s+/', $input, -1, PREG_SPLIT_NO_EMPTY);
+        $tokens = Arr::is($tokens) ? $tokens : [];
         $tokens = (new Collection($tokens))
             ->filter(function ($token) {
-                return Val::isNotEmpty($token);
+                return Val::isNotEmpty($token) && !Arr::hasKey(self::STOPWORDS, (string)$token);
             })
             ->toArray();
 
         return Arr::unique($tokens);
+    }
+
+    protected function normalizeText(string $input): string
+    {
+        $input = Str::make($input)->trim()->lower()->val();
+        $input = (string)preg_replace('/[^a-z0-9]+/', ' ', $input);
+
+        return Str::trim($input);
     }
 
     protected function buildTestPairs(array $samples, array $labels, float $testSize): array

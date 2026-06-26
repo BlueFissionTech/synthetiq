@@ -88,7 +88,7 @@ return [
         ['good', 'fine', 'well', 'happy']
     ),
     'thank you' => array(
-        ['you’re welcome'],
+        ["you're welcome"],
         [
             'Thank you',
             'Thanks',
@@ -100,7 +100,7 @@ return [
         ],
         ['thanks', 'gratitude', 'appreciation']
     ),
-    'you’re welcome' => array(
+    "you're welcome" => array(
         ['small talk'],
         [
             'You’re welcome',
@@ -144,6 +144,24 @@ return [
 		],
 		['talk', 'chat', 'conversation', 'discussion']
 	),
+    'joke' => array(
+        ['joke response'],
+        [
+            'Tell me a joke',
+            'Can you tell me a joke?',
+            'Say something funny',
+            'Make me laugh',
+        ],
+        ['joke', 'funny', 'laugh', 'humor']
+    ),
+    'joke response' => array(
+        ['small talk'],
+        [
+            "Why don't scientists trust atoms? Because they make up everything!",
+            "I can share a light joke when you ask for one.",
+        ],
+        ['joke', 'funny', 'humor']
+    ),
     'excuse me' => array(
         ['confusion', 'acknowledgement'],
         [
@@ -381,6 +399,25 @@ return [
 		],
 		['weather', 'forecast', 'temperature', 'condition', 'city']
 	),
+    'time' => array(
+        ['timeanddate response'],
+        [
+            'What time is it?',
+            'Tell me the time',
+            'Current time',
+            'What is the date?',
+            'Tell me the date',
+        ],
+        ['time', 'date', 'current time', 'clock']
+    ),
+    'timeanddate response' => array(
+        ['time', 'thank you'],
+        [
+            "I can help with time and date requests when a time provider is configured.",
+            "Ask for the current time or date to check the configured clock source.",
+        ],
+        ['time', 'date', 'clock']
+    ),
 	'calculator' => array(
 		['math operation'],
 		[

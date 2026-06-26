@@ -41,7 +41,9 @@ return [
     ],
     'status' => [
         'priority' => 11,
+        'train_statements' => false,
         'keywords' => [
+            'what is your status',
             'status',
             'update',
             'status report',
@@ -61,6 +63,7 @@ return [
         'priority' => 10,
         'keywords' => [
             'you\'re welcome',
+            'you are welcome',
             'no problem',
             'no worries',
             'glad to help',
@@ -68,6 +71,7 @@ return [
     ],
     'file management' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'file',
             'files',
@@ -84,11 +88,16 @@ return [
     ],
     'file operation' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'move file',
+            'move the file',
             'delete file',
+            'delete the file',
             'rename file',
+            'rename the file',
             'copy file',
+            'copy the file',
             'save file',
             'open file',
             'file operation',
@@ -96,7 +105,9 @@ return [
     ],
     'list management' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
+            'create a list',
             'list',
             'lists',
             'checklist',
@@ -112,8 +123,10 @@ return [
     ],
     'list operation' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'add item',
+            'add item to list',
             'remove item',
             'show list',
             'delete list',
@@ -123,6 +136,7 @@ return [
     ],
     'note management' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'note',
             'notes',
@@ -134,16 +148,20 @@ return [
     ],
     'note operation' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'add note',
             'delete note',
+            'delete the note',
             'show note',
             'note content',
         ],
     ],
     'schedule management' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
+            'show me my calendar',
             'schedule',
             'calendar',
             'appointment',
@@ -154,8 +172,11 @@ return [
     ],
     'schedule operation' => [
         'priority' => 12,
+        'train_statements' => false,
         'keywords' => [
             'add event',
+            'add an event',
+            'add an event to my calendar',
             'delete event',
             'remove event',
             'schedule meeting',
@@ -188,8 +209,10 @@ return [
         ],
     ],
     'math operation' => [
-        'priority' => 11,
+        'priority' => 13,
+        'train_statements' => false,
         'keywords' => [
+            'math operation',
             'math',
             'calculation',
             'arithmetic',
@@ -197,6 +220,78 @@ return [
             'difference',
             'product',
             'quotient',
+        ],
+    ],
+    'small talk' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'talk',
+            'chat',
+            'conversation',
+            'small talk',
+        ],
+    ],
+    'joke' => [
+        'priority' => 13,
+        'keywords' => [
+            'tell me a joke',
+            'joke',
+            'funny',
+            'make me laugh',
+            'humor',
+        ],
+    ],
+    'joke response' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'joke',
+            'funny',
+            'humor',
+        ],
+    ],
+    'weather forecast' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'weather',
+            'forecast',
+            'temperature',
+            'condition',
+            'city',
+        ],
+    ],
+    'time' => [
+        'priority' => 13,
+        'keywords' => [
+            'what time is it',
+            'tell me the time',
+            'current time',
+            'what is the date',
+            'tell me the date',
+            'time',
+            'date',
+            'clock',
+        ],
+    ],
+    'timeanddate response' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'time',
+            'date',
+            'clock',
+        ],
+    ],
+    'instruction' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'instruction',
+            'how to',
+            'guide',
+            'tutorial',
         ],
     ],
     'how to' => [
@@ -244,6 +339,104 @@ return [
             'target',
         ],
     ],
+    'provide information' => [
+        'priority' => 10,
+        'train_statements' => false,
+        'keywords' => [
+            'here is what i found',
+            'information',
+            'details',
+            'data',
+            'facts',
+        ],
+    ],
+    'command' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'command',
+            'execute',
+            'perform',
+            'action',
+        ],
+    ],
+    'execution' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'execution',
+            'process',
+            'action',
+            'running',
+        ],
+    ],
+    'confirmation' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'confirmation',
+            'completed',
+            'done',
+            'finished',
+        ],
+    ],
+    'error handling' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'error',
+            'problem',
+            'issue',
+            'failed',
+        ],
+    ],
+    'error response' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'retry',
+            'alternative',
+            'again',
+            'different',
+        ],
+    ],
+    'introduction' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'name',
+            'identity',
+            'assistant',
+        ],
+    ],
+    'apology' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'apology',
+            'sorry',
+            'inconvenience',
+            'resolve',
+        ],
+    ],
+    'goal response' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'goal',
+            'objective',
+            'aim',
+            'purpose',
+        ],
+    ],
+    'unknown.intent' => [
+        'priority' => 4,
+        'train_statements' => false,
+        'keywords' => [
+            'unknown',
+            'random input tokens',
+        ],
+    ],
     'search' => [
         'priority' => 6,
         'keywords' => [
@@ -266,6 +459,17 @@ return [
             'topic',
             'answers',
             'database',
+        ],
+    ],
+    'search operation' => [
+        'priority' => 8,
+        'train_statements' => false,
+        'keywords' => [
+            'search',
+            'find',
+            'look up',
+            'lookup',
+            'query',
         ],
     ],
 ];

@@ -290,6 +290,7 @@ class SynthetIQ
 
         $turnScores = $scores ? $scores->toArray() : [];
         $this->_context->set('intent_scores', $turnScores);
+        $this->_context->set('classified_intent_scores', $turnScores);
         $this->_context->set('selected_intent_scores', $turnScores);
         $this->_context->set('intent_confidence', $confidence);
         $this->recordAudit('intent.scored', [
@@ -308,6 +309,7 @@ class SynthetIQ
             $intent = $this->_context->get('last_intent') ?? new Intent('unknown.intent', 'Unknown');
         }
         $this->_context->set('current_intent', $intent);
+        $this->_context->set('classified_intent_label', $intent->getLabel());
         $this->_context->set('selected_intent_label', $intent->getLabel());
 
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, false);
@@ -382,6 +384,8 @@ class SynthetIQ
         $fallbackResponse = $this->maybeRunFallback($input, $intent, $scores, $confidence, true);
         if ($fallbackResponse !== null) {
             $response = $fallbackResponse;
+            $this->_context->set('classified_intent_label', $intent->getLabel());
+            $this->_context->set('classified_intent_scores', $turnScores);
             $this->_context->set('selected_intent_label', $intent->getLabel());
             $this->_context->set('selected_intent_scores', $turnScores);
         }
@@ -410,6 +414,57 @@ class SynthetIQ
         $response = $this->processInput($input);
 
         return $this->buildResponseEnvelope($input, $response);
+    }
+
+    public function classifyInput(string $input): ?Intent
+    {
+        $rawInput = $input;
+        $this->resetTurnDiagnostics($rawInput);
+        $this->applyConversationState();
+
+        $input = ContractionNormalizer::normalize($input);
+        $input = $this->normalizeInput($input);
+        $inputPolicy = $this->inspectPolicy('input', $input, []);
+        if (!$inputPolicy->allowed()) {
+            $intent = new Intent('policy.denied', 'Policy Denied');
+            $this->_context->set('current_intent', $intent);
+            $this->_context->set('classified_intent_label', $intent->getLabel());
+            $this->_context->set('classified_intent_scores', [$intent->getLabel() => 1.0]);
+            $this->_context->set('selected_intent_label', $intent->getLabel());
+            $this->_context->set('selected_intent_scores', [$intent->getLabel() => 1.0]);
+            $this->_context->set('intent_confidence', 1.0);
+
+            return $intent;
+        }
+
+        $memoryRecall = $this->recallMemory($input);
+        $scores = $this->_intentClassifier->score($input, $this->_context);
+        if ($memoryRecall) {
+            $scores = $this->applyIntentBiases($scores, $memoryRecall->intentBiases());
+        }
+        $scores = $this->applyConversationFlow($scores);
+
+        $intent = $this->_intentClassifier->classifyFromScores($input, $this->_context, $scores);
+        if (!$intent) {
+            $intent = $this->_context->get('last_intent') ?? new Intent('unknown.intent', 'Unknown');
+        }
+
+        $turnScores = $scores ? $scores->toArray() : [];
+        $confidence = $this->computeConfidence($scores);
+        $this->_context->set('current_intent', $intent);
+        $this->_context->set('intent_scores', $turnScores);
+        $this->_context->set('classified_intent_scores', $turnScores);
+        $this->_context->set('selected_intent_scores', $turnScores);
+        $this->_context->set('intent_confidence', $confidence);
+        $this->_context->set('classified_intent_label', $intent->getLabel());
+        $this->_context->set('selected_intent_label', $intent->getLabel());
+        $this->recordAudit('intent.classified', [
+            'input' => $input,
+            'scores' => $turnScores,
+            'confidence' => $confidence,
+        ]);
+
+        return $intent;
     }
 
     public function addRoute($statement, $type, $to = []) {
@@ -451,6 +506,21 @@ class SynthetIQ
         }
     }
 
+    public function addResponseTemplate($statement, $type): void
+    {
+        $intent = $this->_matcher->getIntent($type);
+        if (!$intent) {
+            $intent = new Intent($type, $type);
+            $this->_matcher->registerIntent($intent);
+        }
+
+        $this->_responseGenerator->addTemplate($type, $statement);
+
+        if (Val::isNotEmpty($statement) && $this->canCall($this->_predictor, 'addSentence')) {
+            $this->_predictor->addSentence((string)$statement);
+        }
+    }
+
     public function addIntentKeywords(string $type, array $keywords, ?int $priorityBase = null): void
     {
         if (Arr::count($keywords) === 0) {
@@ -482,9 +552,16 @@ class SynthetIQ
 
     protected function computePriority(string $text, int $base): float
     {
-        $priority = (float)$base;
+        $text = Str::trim($text);
+        $tokens = 0;
+        foreach (Str::split(Str::lower($text), ' ') as $token) {
+            if (Val::isNotEmpty(Str::trim((string)$token))) {
+                $tokens++;
+            }
+        }
         $length = Str::len($text);
-        $priority -= ($length / ($base / 2)) ?? $priority;
+        $specificity = Num::min(8.0, ($tokens * 1.5) + ($length / 20));
+        $priority = (float)$base + $specificity;
 
         return $priority;
     }
@@ -496,11 +573,18 @@ class SynthetIQ
         }
 
         $updated = $scores->toArray();
+        $boostBase = 1.0;
+        foreach ($updated as $score) {
+            if (Num::is($score)) {
+                $boostBase = Num::max($boostBase, (float)$score);
+            }
+        }
+
         foreach ($biases as $label => $weight) {
             if (!Num::is($weight)) {
                 continue;
             }
-            $updated[$label] = ($updated[$label] ?? 0.0) + (float)$weight;
+            $updated[$label] = ($updated[$label] ?? 0.0) + ((float)$weight * $boostBase);
         }
 
         if (Arr::count($updated) > 0) {
@@ -581,6 +665,10 @@ class SynthetIQ
         $this->_context->set('memory_response_context', []);
         $this->_context->set('memory_selection', []);
         $this->_context->set('response_predictor', $this->responsePredictorDiagnostics());
+        $this->_context->set('classified_intent_label', null);
+        $this->_context->set('classified_intent_scores', []);
+        $this->_context->set('response_intent_label', null);
+        $this->_context->set('response_intent_scores', []);
         $this->_context->set('selected_intent_label', null);
         $this->_context->set('selected_intent_scores', []);
         $this->_context->set('policy_denied', false);
@@ -745,6 +833,8 @@ class SynthetIQ
         $response = $decision->replacement() ?? 'This request cannot be handled by the configured policy.';
         $intent = new Intent('policy.denied', 'Policy Denied');
         $this->_context->set('current_intent', $intent);
+        $this->_context->set('classified_intent_label', $intent->getLabel());
+        $this->_context->set('classified_intent_scores', [$intent->getLabel() => 1.0]);
         $this->_context->set('selected_intent_label', $intent->getLabel());
         $this->_context->set('selected_intent_scores', [$intent->getLabel() => 1.0]);
         $this->_context->set('intent_confidence', 1.0);
@@ -855,24 +945,28 @@ class SynthetIQ
             return;
         }
 
+        $this->_context->set('response_intent_label', $label);
+        $this->_context->set('response_intent_scores', [$label => 1.0]);
+        $this->_context->set('selected_intent_label', $label);
+        $this->_context->set('selected_intent_scores', [$label => 1.0]);
+
         if ($memoryRecall instanceof MemoryRecall && !$memoryRecall->isEmpty()) {
             $this->_context->set('memory_selection', $this->buildMemorySelectionContext($memoryRecall, $response, $label));
             return;
         }
-
-        $this->_context->set('selected_intent_label', $label);
-        $this->_context->set('selected_intent_scores', [$label => 1.0]);
     }
 
     protected function buildResponseEnvelope(string $input, string $response): array
     {
         $intent = $this->_context->get('current_intent');
-        $intentLabel = $this->_context->get('selected_intent_label');
-        $scores = $this->arrayContextValue('selected_intent_scores');
+        $intentLabel = $this->_context->get('classified_intent_label');
+        $scores = $this->arrayContextValue('classified_intent_scores');
         if (Val::isEmpty($scores)) {
             $scores = $this->arrayContextValue('intent_scores');
         }
         $scoredLabel = Arr::keys($scores)[0] ?? null;
+        $responseIntentLabel = $this->_context->get('response_intent_label');
+        $responseScores = $this->arrayContextValue('response_intent_scores');
         $corrected = $this->_context->get('input_corrected');
         $original = $this->_context->get('input_original');
         $memoryRecall = $this->_context->get('memory_recall');
@@ -890,6 +984,11 @@ class SynthetIQ
                 'label' => Str::is($scoredLabel) ? $scoredLabel : (Str::is($intentLabel) ? $intentLabel : ($intent instanceof Intent ? $intent->getLabel() : null)),
                 'confidence' => (float)($this->_context->get('intent_confidence') ?? 0.0),
                 'scores' => $scores,
+            ],
+            'response_route' => [
+                'label' => Str::is($responseIntentLabel) ? $responseIntentLabel : null,
+                'scores' => $responseScores,
+                'expected' => $this->arrayContextValue('expected_intents'),
             ],
             'fallback' => [
                 'used' => (bool)$this->_context->get('fallback_used'),

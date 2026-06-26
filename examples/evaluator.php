@@ -26,10 +26,7 @@ if (!class_exists(SynthetIQEnvelopeClassifier::class)) {
 
         public function classify(string $input, Context $context): ?Intent
         {
-            $envelope = $this->ai->processInputEnvelope($input);
-            $label = (string)($envelope['intent']['label'] ?? '');
-
-            return Val::isEmpty($label) ? null : new Intent($label, $label);
+            return $this->ai->classifyInput($input);
         }
     }
 }

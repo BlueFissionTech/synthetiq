@@ -444,6 +444,8 @@ class SynthetIQTest extends TestCase
         $this->assertSame('Hello HELLO', $envelope['response']);
         $this->assertTrue($envelope['templates']['scripted']['enabled']);
         $this->assertSame('upper(input)', $envelope['templates']['scripted']['blocks'][0]['expression']);
+    }
+
     public function testConversationFlowConstrainsRoutingAndAdvancesState(): void
     {
         $analyzer = new FakeAnalyzer([
@@ -506,6 +508,8 @@ class SynthetIQTest extends TestCase
         $this->assertSame('choose_topic', $envelope['flow']['current_state']);
         $this->assertSame('flow.recovery.intent', $envelope['flow']['last_transition']['intent']);
         $this->assertTrue((bool)$envelope['flow']['last_transition']['fallback']);
+    }
+
     public function testConversationStateInfluencesContextAndResponseEnvelope(): void
     {
         $analyzer = new FakeAnalyzer([

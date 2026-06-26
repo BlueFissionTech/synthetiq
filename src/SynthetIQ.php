@@ -124,6 +124,8 @@ class SynthetIQ
     public function setAuditRedactor(?callable $redactor): void
     {
         $this->_auditTrail->setRedactor($redactor);
+    }
+
     public function setConversationFlow(?ConversationFlow $flow): void
     {
         $this->_conversationFlow = $flow;
@@ -157,6 +159,8 @@ class SynthetIQ
             $this->_conversationFlow->complete();
             $this->recordConversationFlowDiagnostics();
         }
+    }
+
     public function conversationState(): ConversationState
     {
         return $this->_conversationState;
@@ -263,8 +267,6 @@ class SynthetIQ
             return $this->denyTurn($input, $inputPolicy);
         }
 
-        // Run the input through the interpreter, it will produce an output
-        $this->_interpreter->run(Str::lower($input));
         // Run the input through the interpreter when it accepts the phrase.
         try {
             $this->_interpreter->run(Str::lower($input));
@@ -906,7 +908,6 @@ class SynthetIQ
                 'stage' => $this->_context->get('policy_stage'),
             ],
             'audit' => $this->auditTrail(),
-            'memory' => Arr::is($memoryRecall) ? $memoryRecall : [],
             'flow' => $this->arrayContextValue('conversation_flow'),
             'state' => $this->_conversationState->toArray(),
             'correction' => [

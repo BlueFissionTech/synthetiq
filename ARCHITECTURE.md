@@ -58,6 +58,11 @@ Automata and Develation for language, memory, and orchestration primitives.
    - `Scenes\SceneContract` validates authored scene definitions for prompts,
      choices, fallback behavior, voice policy, public-safety constraints, and
      handoff metadata.
+14. **Conversational profile handoff**
+   - `Profiles\ConversationProfile` and `ProfileRegistry` declare and select
+     compatible conversational identities by intent and capability.
+   - `Handoff\ContextEnvelope` and `ContextHandoff` bound context references,
+     reject undeclared capabilities, and emit structured deterministic results.
 
 ## Data Surfaces
 
@@ -69,6 +74,8 @@ Automata and Develation for language, memory, and orchestration primitives.
 - `sample_configs/conversation_state.php` provides a serializable state-store example.
 - `sample_configs/conversation_scenes.php` provides deterministic scene
   contract examples.
+- `sample_configs/conversation_profiles.php` provides a deterministic profile,
+  bounded context, and capability fixture.
 
 ## Why It Does Not Match SmarterChild or Tay
 

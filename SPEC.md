@@ -52,6 +52,8 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - `Policy\PolicyFilterInterface`: Allows deterministic input and output policy checks.
 - `Audit\AuditTrail`: Records structured policy decisions, intent scores, fallback triggers, memory recall, and response-selection metadata.
 - `Scenes\SceneContract`: Validates deterministic scene definitions for authored prompts, choices, fallback behavior, voice guidance, public-safety constraints, and handoff metadata.
+- `Profiles\ConversationProfile` and `Profiles\ProfileRegistry`: Define and select declarative conversational identities by intent and capability.
+- `Handoff\ContextEnvelope`, `Handoff\ContextHandoff`, and `Handoff\HandoffResult`: Bound, redact, validate, and report deterministic profile-to-profile context transfer.
 - `Models\LearningModel`: Optional PHP-ML model (currently standalone).
 
 ### Data Flow
@@ -78,6 +80,10 @@ Provide a simple, flexible conversational engine for low-cost, consistent chat b
 - Response predictor diagnostics and response envelopes are public contracts for observability.
 - Recalled memory episodes can influence routing through intent biases and can
   be reported in the response envelope after response selection.
+- Conversation profiles declare supported intents, capabilities, policies, and
+  permitted context-reference categories. Handoffs redact undeclared context
+  and return accepted, rejected, clarification, or failure results with stable
+  output identifiers.
 
 ### Memory Response Selection
 
@@ -102,6 +108,15 @@ SynthetIQ owns validation and sample scene data. Automata can provide upstream
 orchestration/context surfaces when a runtime executes a scene, and Vibe-authored
 artifacts can generate compatible scene definitions. Hosts own persistence,
 permissions, review workflow, transport, and handoff execution.
+
+### Conversational Profile Handoff
+
+Profile handoff reuses current intent/confidence metadata, conversation state,
+memory references, and scene handoff metadata. SynthetIQ owns declarative
+profile validation, compatible profile selection, bounded context transfer,
+redaction, and structured results. Automata and host runtimes retain ownership
+of agent orchestration, sessions, permissions, execution, storage, transport,
+and provider configuration.
 
 ## Quality Targets
 

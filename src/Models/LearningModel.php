@@ -5,8 +5,10 @@ namespace BlueFission\SynthetIQ\Models;
 use BlueFission\Automata\Context;
 use BlueFission\Automata\Language\MarkovPredictor;
 use BlueFission\Automata\Collections\OrganizedCollection;
-use BlueFission\Str;
 use BlueFission\Arr;
+use BlueFission\Num;
+use BlueFission\Str;
+use BlueFission\Val;
 
 class LearningModel
 {
@@ -26,10 +28,10 @@ class LearningModel
         $this->fragments = new OrganizedCollection();
         $this->fragments->setMax(5000);
 
-        if (isset($options['max_sentence_length'])) {
+        if (Arr::hasKey($options, 'max_sentence_length')) {
             $this->max_sentence_length = (int)$options['max_sentence_length'];
         }
-        if (isset($options['min_sentence_length'])) {
+        if (Arr::hasKey($options, 'min_sentence_length')) {
             $this->min_sentence_length = (int)$options['min_sentence_length'];
         }
     }
@@ -39,7 +41,7 @@ class LearningModel
         $input = $this->normalize($input);
         $response = Str::trim($response);
 
-        if ($input === '' || $response === '') {
+        if (Val::isEmpty($input) || Val::isEmpty($response)) {
             return;
         }
 
@@ -49,7 +51,7 @@ class LearningModel
         $this->rememberStarter($tokens);
         $this->rememberFragments($tokens);
 
-        if (!isset($this->memory[$input])) {
+        if (!Arr::hasKey($this->memory, $input)) {
             $this->memory[$input] = new OrganizedCollection();
             $this->memory[$input]->setMax(2000);
         }
@@ -60,7 +62,7 @@ class LearningModel
     public function train(array $interactions): void
     {
         foreach ($interactions as $interaction) {
-            if (!isset($interaction['input'], $interaction['output'])) {
+            if (!Arr::hasKey($interaction, 'input') || !Arr::hasKey($interaction, 'output')) {
                 continue;
             }
             $this->observe($interaction['input'], $interaction['output']);
@@ -71,7 +73,7 @@ class LearningModel
     {
         $normalized = $this->normalize($input);
 
-        if ($normalized !== '' && isset($this->memory[$normalized])) {
+        if (Val::isNotEmpty($normalized) && Arr::hasKey($this->memory, $normalized)) {
             $response = $this->pickWeighted($this->memory[$normalized]);
             if ($response !== null) {
                 return $response;
@@ -79,7 +81,7 @@ class LearningModel
         }
 
         $closest = $this->findClosestInput($normalized);
-        if ($closest && isset($this->memory[$closest])) {
+        if (Val::isNotEmpty($closest) && Arr::hasKey($this->memory, $closest)) {
             $response = $this->pickWeighted($this->memory[$closest]);
             if ($response !== null) {
                 return $response;
@@ -116,7 +118,7 @@ class LearningModel
         $this->starters = $this->restoreCollection($payload['starters'] ?? []);
         $this->fragments = $this->restoreCollection($payload['fragments'] ?? []);
 
-        if (isset($payload['markov'])) {
+        if (Arr::hasKey($payload, 'markov')) {
             $this->markov->deserializeModel($payload['markov']);
         }
     }
@@ -132,19 +134,19 @@ class LearningModel
     protected function tokenize(string $text): array
     {
         $tokens = Str::split($text);
-        return array_values(array_filter($tokens, function ($token) {
-            return $token !== '';
-        }));
+        return Arr::values(Arr::make($tokens)->filter(function ($token): bool {
+            return Val::isNotEmpty($token);
+        })->toArray());
     }
 
     protected function rememberStarter(array $tokens): void
     {
-        if (empty($tokens)) {
+        if (Val::isEmpty($tokens)) {
             return;
         }
 
         $starter = $tokens[0];
-        if (count($tokens) > 1) {
+        if (Arr::count($tokens) > 1) {
             $starter .= ' ' . $tokens[1];
         }
 
@@ -153,7 +155,7 @@ class LearningModel
 
     protected function rememberFragments(array $tokens): void
     {
-        $count = count($tokens);
+        $count = Arr::count($tokens);
         if ($count < 2) {
             return;
         }
@@ -174,19 +176,19 @@ class LearningModel
     protected function generateFromMarkov(string $input): string
     {
         $seed = $this->pickWeighted($this->starters);
-        if ($seed === null) {
+        if (Val::isNull($seed)) {
             $tokens = $this->tokenize($input);
             $seed = $tokens[0] ?? '';
         }
 
-        if ($seed === '') {
+        if (Val::isEmpty($seed)) {
             return '';
         }
 
         $words = preg_split('/\\s+/', Str::trim($seed));
         $sentence = $seed;
 
-        while (count($words) < $this->max_sentence_length) {
+        while (Arr::count($words) < $this->max_sentence_length) {
             $next = $this->markov->predictNextWord(end($words));
             if (!$next) {
                 break;
@@ -195,7 +197,7 @@ class LearningModel
             $sentence .= ' ' . $next;
             $words[] = $next;
 
-            if (preg_match('/[.!?]$/', $sentence) && count($words) >= $this->min_sentence_length) {
+            if (Str::matches($sentence, '/[.!?]$/') && Arr::count($words) >= $this->min_sentence_length) {
                 break;
             }
         }
@@ -205,7 +207,7 @@ class LearningModel
 
     protected function findClosestInput(string $normalized): ?string
     {
-        if ($normalized === '') {
+        if (Val::isEmpty($normalized)) {
             return null;
         }
 
@@ -215,12 +217,12 @@ class LearningModel
 
         foreach ($this->memory as $key => $responses) {
             $keyTokens = $this->tokenize($key);
-            if (empty($keyTokens)) {
+            if (Val::isEmpty($keyTokens)) {
                 continue;
             }
 
             $common = Arr::intersect($tokens, $keyTokens);
-            $score = count($common) / max(count($tokens), count($keyTokens));
+            $score = Arr::count($common) / Num::max(Arr::count($tokens), Arr::count($keyTokens));
             if ($score > $bestScore) {
                 $bestScore = $score;
                 $bestKey = $key;
@@ -233,13 +235,13 @@ class LearningModel
     protected function pickWeighted(OrganizedCollection $collection): ?string
     {
         $entries = $collection->contents();
-        if (empty($entries)) {
+        if (Val::isEmpty($entries)) {
             return null;
         }
 
         $total = 0;
         foreach ($entries as $entry) {
-            $total += $entry['weight'] ?? 0;
+            $total += Arr::hasKey($entry, 'weight') ? $entry['weight'] : 0;
         }
 
         if ($total <= 0) {
@@ -248,9 +250,9 @@ class LearningModel
 
         $rand = mt_rand(0, $total - 1);
         foreach ($entries as $entry) {
-            $rand -= $entry['weight'] ?? 0;
+            $rand -= Arr::hasKey($entry, 'weight') ? $entry['weight'] : 0;
             if ($rand < 0) {
-                return $entry['value'] ?? null;
+                return Arr::hasKey($entry, 'value') ? $entry['value'] : null;
             }
         }
 

@@ -9,7 +9,7 @@ use BlueFission\Automata\Intent\{Intent, Matcher};
 use BlueFission\Automata\Context;
 use BlueFission\Arr;
 use BlueFission\Str;
-use BlueFission\Collections\Collection;
+use BlueFission\Val;
 
 class Classifier implements IClassifier
 {
@@ -52,12 +52,12 @@ class Classifier implements IClassifier
 
     public function labelFromScores(string $input, ?Arr $scores): ?string
     {
-        if (!$scores instanceof Arr || $scores->count() === 0) {
+        if (!$scores instanceof Arr || Val::isEmpty($scores->toArray())) {
             return $this->naiveClassify($input);
         }
 
         $label = $scores->keys()->get(0);
-        if (!$label) {
+        if (Val::isEmpty($label)) {
             return $this->naiveClassify($input);
         }
 
@@ -73,22 +73,22 @@ class Classifier implements IClassifier
             $intent = $intents[$label];
             $criteria = $intent->getCriteria();
             $criteriaKeywords = $criteria['keywords'] ?? [];
-            if (empty($criteriaKeywords)) {
+            if (Val::isEmpty($criteriaKeywords)) {
                 continue;
             }
 
-            $keywords = (new Collection($criteriaKeywords))
+            $keywords = Arr::make($criteriaKeywords)
                 ->map(function ($keyword) {
-                    return $keyword['word'] ?? null;
+                    return Arr::is($keyword) && Arr::hasKey($keyword, 'word') ? $keyword['word'] : null;
                 })
-                ->filter(function ($keyword) {
-                    return $keyword !== null && $keyword !== '';
+                ->filter(function ($keyword): bool {
+                    return Val::isNotEmpty($keyword);
                 })
                 ->toArray();
 
             $matches = Arr::intersect($keywords, Str::split($input));
 
-            if (!empty($matches)) {
+            if (Val::isNotEmpty($matches)) {
                 return $label;
             }
         }

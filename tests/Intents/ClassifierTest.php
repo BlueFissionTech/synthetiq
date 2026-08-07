@@ -47,6 +47,7 @@ class ClassifierTest extends TestCase
         $matcher = new Matcher($analyzer);
         $intent = new Intent('greeting.intent', 'Greeting', [
             'keywords' => [
+                ['word' => '', 'priority' => 1],
                 ['word' => 'hello', 'priority' => 3],
             ],
         ]);

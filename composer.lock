@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f1abd08b7fcb21728f05efd28c9292f9",
+    "content-hash": "e6a77994b554aafa0b59ff1f28b0609f",
     "packages": [
         {
             "name": "bluefission/automata",
@@ -46,11 +46,7 @@
                     "src/"
                 ]
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "BlueFission\\Tests\\": "tests/"
-                }
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -74,8 +70,8 @@
                 "nlp"
             ],
             "support": {
-                "source": "https://github.com/BlueFissionTech/automata/tree/v1.0.0-alpha.2",
-                "issues": "https://github.com/BlueFissionTech/automata/issues"
+                "issues": "https://github.com/BlueFissionTech/automata/issues",
+                "source": "https://github.com/BlueFissionTech/automata/tree/v1.0.0-alpha.2"
             },
             "time": "2026-07-08T21:36:31+00:00"
         },
@@ -115,10 +111,31 @@
             "license": [
                 "MIT"
             ],
+            "authors": [
+                {
+                    "name": "Devon Scott",
+                    "email": "dscott@bluefission.com",
+                    "homepage": "https://bluefission.com",
+                    "role": "Developer"
+                }
+            ],
             "description": "DevElation-oriented storage objects, connectors, and query helpers for Kafka, Neo4j, GraphQL, and related data systems.",
+            "homepage": "https://github.com/BlueFissionTech/chronicler",
+            "keywords": [
+                "bluefission",
+                "chronicler",
+                "data",
+                "develation",
+                "graphql",
+                "kafka",
+                "materia",
+                "neo4j",
+                "php",
+                "storage"
+            ],
             "support": {
                 "issues": "https://github.com/BlueFissionTech/chronicler/issues",
-                "source": "https://github.com/BlueFissionTech/chronicler/tree/main"
+                "source": "https://github.com/BlueFissionTech/chronicler"
             },
             "time": "2026-07-08T22:35:27+00:00"
         },
@@ -153,50 +170,17 @@
             },
             "type": "library",
             "autoload": {
+                "files": [
+                    "src/functions.php"
+                ],
                 "psr-4": {
                     "BlueFission\\": "src"
                 },
                 "classmap": [
                     "src/"
-                ],
-                "files": [
-                    "src/functions.php"
                 ]
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "BlueFission\\Tests\\": "tests/"
-                }
-            },
-            "archive": {
-                "exclude": [
-                    "/.codex",
-                    "/.github",
-                    "/.idea",
-                    "/.phpunit.cache",
-                    "/.phpunit.result.cache",
-                    "/AGENTS.behavior.md",
-                    "/AGENTS.md",
-                    "/SPEC.md",
-                    "/artifacts",
-                    "/composer.lock",
-                    "/docker",
-                    "/examples",
-                    "/harness.json",
-                    "/phpunit.xml",
-                    "/scripts",
-                    "/tests",
-                    "/tests.md"
-                ]
-            },
-            "scripts": {
-                "test": [
-                    "vendor/bin/phpunit --do-not-cache-result"
-                ],
-                "test:services": [
-                    "vendor/bin/phpunit --do-not-cache-result tests/Services"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -1484,7 +1468,6 @@
                 "shasum": ""
             },
             "require": {
-                "ext-ctype": "*",
                 "ext-json": "*",
                 "ext-tokenizer": "*",
                 "php": ">=7.4"
@@ -2010,10 +1993,10 @@
             },
             "require": {
                 "ext-dom": "*",
+                "ext-filter": "*",
                 "ext-json": "*",
                 "ext-libxml": "*",
                 "ext-mbstring": "*",
-                "ext-xml": "*",
                 "ext-xmlwriter": "*",
                 "myclabs/deep-copy": "^1.13.4",
                 "phar-io/manifest": "^2.0.4",

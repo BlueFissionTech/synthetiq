@@ -14,14 +14,6 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/bluefission/develation"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/bluefission/automata"
-        },
-        {
-            "type": "vcs",
             "url": "https://github.com/BlueFissionTech/simpleclients"
         }
     ],

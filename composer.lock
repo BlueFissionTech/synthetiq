@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e6a77994b554aafa0b59ff1f28b0609f",
+    "content-hash": "e451ea4a4aa4e5aa2bf1f01fbdcb63db",
     "packages": [
         {
             "name": "bluefission/automata",
@@ -226,7 +226,8 @@
                 "shasum": ""
             },
             "require": {
-                "bluefission/develation": "^1.0.0-alpha",
+                "bluefission/develation": "^1.3.39",
+                "ext-json": "*",
                 "php": ">=8.2",
                 "simplehtmldom/simplehtmldom": "^2.0@RC"
             },
@@ -247,6 +248,7 @@
                     "src/"
                 ]
             },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -259,15 +261,22 @@
                 }
             ],
             "description": "Simple client wrappers for Blue Fission provider integrations",
+            "homepage": "https://github.com/BlueFissionTech/simpleclients",
             "keywords": [
                 "api",
+                "bluefission",
                 "clients",
                 "http",
-                "services"
+                "materia",
+                "php",
+                "providers",
+                "services",
+                "simpleclients",
+                "transports"
             ],
             "support": {
-                "source": "https://github.com/BlueFissionTech/simpleclients/tree/master",
-                "issues": "https://github.com/BlueFissionTech/simpleclients/issues"
+                "issues": "https://github.com/BlueFissionTech/simpleclients/issues",
+                "source": "https://github.com/BlueFissionTech/simpleclients"
             },
             "time": "2026-07-06T00:26:29+00:00"
         },

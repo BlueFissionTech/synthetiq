@@ -25,7 +25,7 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 SynthetIQ targets PHP 8.2 or newer.
 
 ```bash
-composer install
+composer require bluefission/synthetiq:^0.1.0-alpha
 ```
 
 ## Quick Start

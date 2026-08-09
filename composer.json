@@ -30,7 +30,7 @@
         "php": ">=8.2",
         "bluefission/develation": "^1.3.39",
         "bluefission/automata": "^1.0.0-alpha.2",
-        "bluefission/simpleclients": "dev-master",
+        "bluefission/simpleclients": "^0.1.0-alpha",
         "php-ai/php-ml": "^0.10.0"
     },
     "require-dev": {

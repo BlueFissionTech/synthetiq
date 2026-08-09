@@ -1,8 +1,22 @@
 {
     "name": "bluefission/synthetiq",
+    "type": "library",
     "description": "Adaptive conversational AI system",
+    "homepage": "https://github.com/BlueFissionTech/synthetiq",
     "license": "MIT",
-    "keywords": ["synthetiq", "ai", "nlp", "machine learning", "chatbot", "bot", "communication", "natural language processing"],
+    "keywords": [
+        "synthetiq",
+        "bluefission",
+        "materia",
+        "php",
+        "ai",
+        "nlp",
+        "machine learning",
+        "chatbot",
+        "bot",
+        "communication",
+        "natural language processing"
+    ],
     "authors": [
         {
             "name": "Devon Scott",
@@ -11,18 +25,12 @@
             "role": "Developer"
         }
     ],
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/BlueFissionTech/simpleclients"
-        }
-    ],
     "minimum-stability": "dev",
     "require": {
         "php": ">=8.2",
-        "bluefission/develation": "^1.0.0-alpha",
+        "bluefission/develation": "^1.3.39",
         "bluefission/automata": "^1.0.0-alpha.2",
-        "bluefission/simpleclients": "dev-master",
+        "bluefission/simpleclients": "^0.1.0-alpha",
         "php-ai/php-ml": "^0.10.0"
     },
     "require-dev": {
@@ -38,9 +46,42 @@
             "BlueFission\\SynthetIQ\\Tests\\": "tests/" 
         }
     },
+    "scripts": {
+        "test": "vendor/bin/phpunit --do-not-cache-result"
+    },
     "config": {
+        "platform-check": true,
         "allow-plugins": {
             "php-http/discovery": true
+        },
+        "audit": {
+            "abandoned": "report"
         }
+    },
+    "archive": {
+        "exclude": [
+            "/.agents",
+            "/.codex",
+            "/.github",
+            "/.phpunit.cache",
+            "/.phpunit.result.cache",
+            "/AGENTS.behavior.md",
+            "/AGENTS.md",
+            "/ARCHITECTURE.md",
+            "/SPEC.md",
+            "/artifacts",
+            "/composer.lock",
+            "/docker",
+            "/examples",
+            "/harness.json",
+            "/phpunit.xml",
+            "/scripts",
+            "/tests",
+            "/tests.md"
+        ]
+    },
+    "support": {
+        "issues": "https://github.com/BlueFissionTech/synthetiq/issues",
+        "source": "https://github.com/BlueFissionTech/synthetiq"
     }
 }

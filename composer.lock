@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "972bd7a83b57ff9fa285f06183644e06",
+    "content-hash": "34bd2de6bc75761547995af705d66e3d",
     "packages": [
         {
             "name": "bluefission/automata",
@@ -121,16 +121,16 @@
         },
         {
             "name": "bluefission/develation",
-            "version": "v1.3.41",
+            "version": "v1.3.42",
             "source": {
                 "type": "git",
                 "url": "https://github.com/BlueFissionTech/develation.git",
-                "reference": "25bdd65152ef39a83524b30eb47cba2c061ded91"
+                "reference": "9731b85193e15b769c21ff12f4ee658eabbeb174"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/25bdd65152ef39a83524b30eb47cba2c061ded91",
-                "reference": "25bdd65152ef39a83524b30eb47cba2c061ded91",
+                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/9731b85193e15b769c21ff12f4ee658eabbeb174",
+                "reference": "9731b85193e15b769c21ff12f4ee658eabbeb174",
                 "shasum": ""
             },
             "require": {
@@ -146,7 +146,9 @@
                 "phpunit/phpunit": "^11.5"
             },
             "suggest": {
-                "cboden/ratchet": "Install to use the optional BlueFission\\Async\\Sock Ratchet websocket transport."
+                "cboden/ratchet": "Install to use the optional BlueFission\\Async\\Sock Ratchet websocket transport.",
+                "ext-memcached": "Install to use Memcached storage and MemQueue.",
+                "ext-redis": "Install to use Redis connections, storage, and reliable queues."
             },
             "type": "library",
             "autoload": {
@@ -189,7 +191,7 @@
                 "issues": "https://github.com/BlueFissionTech/develation/issues",
                 "source": "https://github.com/BlueFissionTech/develation"
             },
-            "time": "2026-08-07T19:31:33+00:00"
+            "time": "2026-08-17T19:23:43+00:00"
         },
         {
             "name": "bluefission/simpleclients",

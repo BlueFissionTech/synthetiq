@@ -7,10 +7,10 @@ context, memory, goals, statements, feedback, tools, and orchestration.
 
 ## Dependency baseline
 
-- DevElation is consumed from Packagist at `^1.3.39`; no repository override is
-  needed.
-- Automata is consumed from Packagist at `^1.0.0-alpha.2`; the current lock
-  resolves to `v1.0.0-alpha.3`.
+- DevElation is consumed from Packagist at `^1.3.42` and resolves to
+  `v1.3.42`.
+- Automata is consumed from Packagist at `^1.0.0-alpha.3` and resolves to
+  `v1.0.0-alpha.3`.
 - Chronicler is resolved transitively from Packagist through Automata at
   `^0.1.2-alpha`.
 - SimpleClients is consumed directly from Packagist at `^0.1.0-alpha`.

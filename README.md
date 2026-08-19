@@ -314,6 +314,32 @@ $envelope = $ai->processInputEnvelope('status');
 $tone = $envelope['state']['tone'];
 ```
 
+## Conversation Profiles and Context Handoff
+
+`ConversationProfile`, `ProfileRegistry`, `ContextEnvelope`, and
+`ContextHandoff` provide a bounded transfer contract for deterministic
+conversational agents. Profiles declare supported intents, capabilities, and
+permitted context-reference categories; undeclared context is redacted before
+an accepted handoff.
+
+```php
+use BlueFission\SynthetIQ\Handoff\ContextEnvelope;
+use BlueFission\SynthetIQ\Handoff\ContextHandoff;
+use BlueFission\SynthetIQ\Profiles\ConversationProfile;
+
+$config = require 'sample_configs/conversation_profiles.php';
+$profile = ConversationProfile::fromArray($config['profiles']['support-guide']);
+$context = ContextEnvelope::fromArray($config['handoff']['context']);
+$result = (new ContextHandoff())->handoff(
+    $profile,
+    $context,
+    $config['handoff']['required_capabilities']
+);
+```
+
+See `docs/conversation-profile-handoff.md` for selection, status, redaction,
+ownership, and DevElation hook details.
+
 ## Conversation Scene Contracts
 
 `BlueFission\SynthetIQ\Scenes\SceneContract` validates deterministic scene

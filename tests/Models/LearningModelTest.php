@@ -36,4 +36,16 @@ class LearningModelTest extends TestCase
 
         $this->assertNotSame('', $response);
     }
+
+    public function testTrainingSkipsIncompleteInteractions(): void
+    {
+        $model = new LearningModel();
+        $model->train([
+            ['input' => 'hello'],
+            ['output' => 'ignored'],
+            ['input' => 'hello', 'output' => 'Hi there!'],
+        ]);
+
+        $this->assertSame('Hi there!', $model->generate('hello'));
+    }
 }

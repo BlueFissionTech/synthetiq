@@ -8,6 +8,8 @@ SynthetIQ is a lightweight conversational library for building simple, low-cost 
 - Allow lightweight variation and continuity with a small Markov predictor.
 - Favor consistent, repeatable behavior over unconstrained generation.
 - Lean on BlueFission Develation and Automata objects for language, decision, and context utilities.
+- See `docs/automata-capability-audit.md` for the current upstream capability
+  matrix, dependency baseline, and package ownership boundaries.
 
 ## How It Works
 

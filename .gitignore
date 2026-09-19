@@ -9,3 +9,6 @@
 /vendor/
 /models/
 
+
+# Blue Fission Codex harness
+/AGENTS.standards.md

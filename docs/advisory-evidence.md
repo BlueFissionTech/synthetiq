@@ -32,7 +32,7 @@ Every record uses `version: 1` and contains these fields:
 | `trust` | Review, confidence, uncertainty, freshness, and contradiction metadata. `authority` is always `none`. |
 | `review` | Review state and untrusted references to separate reviewer/decision records. A host must independently resolve and scope-bind those records. Review never changes evidence authority. |
 | `outcomes` | Separate requested, host-accepted, persisted, and executed observations. Their references remain untrusted until independently resolved to a scope-bound host receipt. Unknown is represented as `null`, not `false` or zero. |
-| `withdrawal` | Explicit evidence-withdrawal state and a reference to a scoped tombstone record. Source revocation is separate. Empty, failed, denied, partial, or later-successful retrieval does not create or clear withdrawal. |
+| `withdrawal` | Explicit evidence-withdrawal state, the pre-withdrawal projection target, and a reference to a scoped tombstone record. Source revocation is separate. Empty, failed, denied, partial, or later-successful retrieval does not create or clear withdrawal. |
 | `risk_signals` | Structured, non-executable warnings such as forged authority or prompt-injection patterns. |
 | `diagnostics` | Stable reasons for missing, stale, rejected, conflicting, out-of-scope, denied, or failed evidence. |
 
@@ -82,7 +82,11 @@ The fixture representation is an array with this shape:
         'persisted' => ['state' => null, 'receipt_ref' => null],
         'executed' => ['state' => null, 'receipt_ref' => null],
     ],
-    'withdrawal' => ['state' => 'none', 'tombstone_ref' => null],
+    'withdrawal' => [
+        'state' => 'none',
+        'projection_of' => null,
+        'tombstone_ref' => null,
+    ],
     'risk_signals' => [],
     'diagnostics' => [],
 ]
@@ -138,6 +142,15 @@ diagnostic inputs and cannot withdraw evidence. A valid withdrawal remains in
 effect after source recovery unless a later independently verified tombstone
 explicitly supersedes it; recovery alone cannot resurrect evidence.
 
+A confirmed withdrawal is a projection of the targeted evidence, not a new
+evidence item. The projection preserves the target `evidence_id`, records the
+pre-withdrawal ID and digest in `withdrawal.projection_of`, and binds the
+tombstone to that same pair. The projection envelope has its own newly computed
+digest because its status and diagnostics changed. An envelope with another
+evidence ID, a missing projection binding, or a binding that differs from the
+tombstone target must remain rejected and cannot acquire withdrawal state for
+the target.
+
 The portable persistence, ordering, and reusable tombstone record belong to
 Chronicler. The candidate fixtures model only the fields SynthetIQ needs to
 project withdrawal safely into conversational diagnostics and adapters; they do
@@ -158,9 +171,10 @@ not define or implement the durable Chronicler contract.
 6. Unknown confidence and uncertainty remain `null`; they are not converted to
    numeric zero.
 7. Withdrawal requires an explicit scoped tombstone whose target identity and
-   digest validate. Source revocation, retrieval absence/failure, duplicate or
-   reordered tombstones, and later source recovery neither create nor clear
-   withdrawal.
+   pre-withdrawal digest match both the projection binding and the projected
+   envelope's stable evidence identity. Source revocation, retrieval
+   absence/failure, an unrelated envelope, duplicate or reordered tombstones,
+   and later source recovery neither create nor clear withdrawal.
 8. Rejected, stale, contradictory, revoked, or out-of-scope evidence cannot
    bias intent routing unless an injected host policy explicitly permits a
    bounded use and records the reason separately.
@@ -181,7 +195,7 @@ results for:
 - conflicting peer evidence; and
 - reviewed evidence that still retains `authority=none`;
 - unverified self-authored host acceptance;
-- wrong-scope, wrong-target, duplicate, and reordered tombstones;
+- wrong-scope, wrong-target, unbound-projection, duplicate, and reordered tombstones;
 - derivation from withdrawn evidence; and
 - source recovery that cannot resurrect withdrawn evidence.
 

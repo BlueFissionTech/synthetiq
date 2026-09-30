@@ -73,6 +73,7 @@ $base = [
     ],
     'withdrawal' => [
         'state' => 'none',
+        'projection_of' => null,
         'tombstone_ref' => null,
         'tombstone' => null,
         'tombstone_candidates' => [],
@@ -105,6 +106,20 @@ $expected = static function (array $overrides = []): array {
 $withdrawalTarget = $fixture('withdrawal-target', [], $expected());
 $targetId = $withdrawalTarget['input']['evidence_id'];
 $targetDigest = $withdrawalTarget['input']['digest'];
+
+$projection = static function (array $target, array $overrides, array $expected) use ($digest): array {
+    $input = $target['input'];
+    unset($input['digest']);
+    $input = array_replace_recursive($input, $overrides);
+    $input['evidence_id'] = $target['input']['evidence_id'];
+    $input['withdrawal']['projection_of'] = [
+        'evidence_id' => $target['input']['evidence_id'],
+        'digest' => $target['input']['digest'],
+    ];
+    $input['digest'] = $digest($input);
+
+    return ['input' => $input, 'expected' => $expected];
+};
 
 $tombstone = static function (array $overrides = []) use ($targetId, $targetDigest): array {
     return array_replace([
@@ -259,7 +274,7 @@ return [
                 ['code' => 'host_receipt_unverified', 'state' => 'quarantined'],
             ],
         ], $expected(['diagnostic_codes' => ['host_receipt_unverified']])),
-        'explicit_withdrawal' => $fixture('explicit-withdrawal', [
+        'explicit_withdrawal' => $projection($withdrawalTarget, [
             'withdrawal' => [
                 'state' => 'confirmed',
                 'tombstone_ref' => 'tombstone:withdrawal-target:1',
@@ -269,6 +284,20 @@ return [
                 ['code' => 'evidence_withdrawn', 'state' => 'rejected'],
             ],
         ], $expected(['diagnostic_codes' => ['evidence_withdrawn']])),
+        'unbound_withdrawal_projection' => $fixture('unbound-withdrawal-projection', [
+            'withdrawal' => [
+                'state' => 'rejected',
+                'projection_of' => [
+                    'evidence_id' => $targetId,
+                    'digest' => $targetDigest,
+                ],
+                'tombstone_ref' => 'tombstone:withdrawal-target:1',
+                'tombstone' => $tombstone(),
+            ],
+            'diagnostics' => [
+                ['code' => 'tombstone_projection_mismatch', 'state' => 'rejected'],
+            ],
+        ], $expected(['diagnostic_codes' => ['tombstone_projection_mismatch']])),
         'wrong_scope_tombstone' => $fixture('wrong-scope-tombstone', [
             'withdrawal' => [
                 'state' => 'rejected',
@@ -316,7 +345,7 @@ return [
                 ['code' => 'withdrawn_parent_rejected', 'state' => 'rejected'],
             ],
         ], $expected(['diagnostic_codes' => ['withdrawn_parent_rejected']])),
-        'source_recovery_non_resurrection' => $fixture('source-recovery-non-resurrection', [
+        'source_recovery_non_resurrection' => $projection($withdrawalTarget, [
             'source' => [
                 'status' => 'available',
                 'observed_at' => '2026-09-29T01:00:00Z',

@@ -54,6 +54,7 @@ final class AdvisoryEvidenceFixtureTest extends TestCase
         $this->assertNull($input['outcomes']['persisted']['state']);
         $this->assertNull($input['outcomes']['executed']['state']);
         $this->assertSame('none', $input['withdrawal']['state']);
+        $this->assertNull($input['withdrawal']['projection_of']);
         $this->assertNull($input['withdrawal']['tombstone_ref']);
         $this->assertNull($input['withdrawal']['tombstone']);
         $this->assertSame([], $input['withdrawal']['tombstone_candidates']);
@@ -116,6 +117,34 @@ final class AdvisoryEvidenceFixtureTest extends TestCase
         );
     }
 
+    public function testConfirmedWithdrawalRequiresTargetBoundProjection(): void
+    {
+        $config = require dirname(__DIR__, 2) . '/sample_configs/advisory_evidence.php';
+        $target = $config['fixtures']['withdrawal_target']['input'];
+
+        foreach (['explicit_withdrawal', 'source_recovery_non_resurrection'] as $name) {
+            $projection = $config['fixtures'][$name]['input'];
+            $binding = $projection['withdrawal']['projection_of'];
+            $tombstone = $projection['withdrawal']['tombstone'];
+
+            $this->assertSame('confirmed', $projection['withdrawal']['state'], $name);
+            $this->assertSame($target['evidence_id'], $projection['evidence_id'], $name);
+            $this->assertSame($target['evidence_id'], $binding['evidence_id'], $name);
+            $this->assertSame($target['digest'], $binding['digest'], $name);
+            $this->assertSame($binding['evidence_id'], $tombstone['target_evidence_id'], $name);
+            $this->assertSame($binding['digest'], $tombstone['target_digest'], $name);
+        }
+
+        $unbound = $config['fixtures']['unbound_withdrawal_projection'];
+        $this->assertNotSame($target['evidence_id'], $unbound['input']['evidence_id']);
+        $this->assertSame('rejected', $unbound['input']['withdrawal']['state']);
+        $this->assertSame(
+            ['tombstone_projection_mismatch'],
+            $unbound['expected']['diagnostic_codes']
+        );
+        $this->assertFalse($unbound['expected']['admitted_to_context']);
+    }
+
     public function testWithdrawalBlocksDerivedAndRecoveredSourceRecords(): void
     {
         $config = require dirname(__DIR__, 2) . '/sample_configs/advisory_evidence.php';
@@ -129,6 +158,8 @@ final class AdvisoryEvidenceFixtureTest extends TestCase
         $this->assertSame('available', $recovered['input']['source']['status']);
         $this->assertSame('current', $recovered['input']['trust']['freshness']);
         $this->assertSame('confirmed', $recovered['input']['withdrawal']['state']);
+        $this->assertSame($target['evidence_id'], $recovered['input']['evidence_id']);
+        $this->assertSame($target['digest'], $recovered['input']['withdrawal']['projection_of']['digest']);
         $this->assertFalse($recovered['expected']['admitted_to_context']);
     }
 

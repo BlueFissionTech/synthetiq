@@ -19,6 +19,19 @@ vendor/bin/phpunit --do-not-cache-result tests/Training
 vendor/bin/phpunit --do-not-cache-result tests/SynthetIQTest.php
 ```
 
+## Procedural Conversation Acceptance
+
+```bash
+php vendor/phpunit/phpunit/phpunit --do-not-cache-result tests/Acceptance
+```
+
+The [procedural acceptance suite](tests/Acceptance/README.md) covers support chat,
+everyday conversation, and a synthetic console with original repository-owned
+training fixtures. It uses real route training and held-out inputs, explicitly
+rejects fallback in trained-answer tests, and tests local uncertainty recovery
+separately. No hosted model, provider credentials, corpus download, or service is
+required. The console is simulated; it does not execute host commands.
+
 ## Optional JenSS Fixtures
 
 JenSS fixture validation is opt-in. Set one of these environment variables to a local Jenerator autoload file:

@@ -8,16 +8,16 @@
     "packages": [
         {
             "name": "bluefission/automata",
-            "version": "v1.0.0-alpha.3",
+            "version": "v1.0.0-alpha.9",
             "source": {
                 "type": "git",
                 "url": "https://github.com/BlueFissionTech/automata.git",
-                "reference": "c48adfd13bcf4bddd66dfd0fee77c5d5430b52f0"
+                "reference": "2922b4c47bf8eeaf31802df55098228e2be14226"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/BlueFissionTech/automata/zipball/c48adfd13bcf4bddd66dfd0fee77c5d5430b52f0",
-                "reference": "c48adfd13bcf4bddd66dfd0fee77c5d5430b52f0",
+                "url": "https://api.github.com/repos/BlueFissionTech/automata/zipball/2922b4c47bf8eeaf31802df55098228e2be14226",
+                "reference": "2922b4c47bf8eeaf31802df55098228e2be14226",
                 "shasum": ""
             },
             "require": {
@@ -27,7 +27,7 @@
                 "php-ai/php-ml": "^0.10.0"
             },
             "require-dev": {
-                "bluefission/simpleclients": "dev-master",
+                "bluefission/simpleclients": "^0.1.0-alpha",
                 "phpunit/phpunit": "^11.5"
             },
             "suggest": {
@@ -75,7 +75,7 @@
                 "issues": "https://github.com/BlueFissionTech/automata/issues",
                 "source": "https://github.com/BlueFissionTech/automata"
             },
-            "time": "2026-08-08T21:14:46+00:00"
+            "time": "2026-10-24T16:47:04+00:00"
         },
         {
             "name": "bluefission/chronicler",
@@ -121,16 +121,16 @@
         },
         {
             "name": "bluefission/develation",
-            "version": "v1.3.42",
+            "version": "v1.3.47",
             "source": {
                 "type": "git",
                 "url": "https://github.com/BlueFissionTech/develation.git",
-                "reference": "9731b85193e15b769c21ff12f4ee658eabbeb174"
+                "reference": "4b9079b8b34010ddd5e0f92774ae9abafbe9ea77"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/9731b85193e15b769c21ff12f4ee658eabbeb174",
-                "reference": "9731b85193e15b769c21ff12f4ee658eabbeb174",
+                "url": "https://api.github.com/repos/BlueFissionTech/develation/zipball/4b9079b8b34010ddd5e0f92774ae9abafbe9ea77",
+                "reference": "4b9079b8b34010ddd5e0f92774ae9abafbe9ea77",
                 "shasum": ""
             },
             "require": {
@@ -148,7 +148,9 @@
             "suggest": {
                 "cboden/ratchet": "Install to use the optional BlueFission\\Async\\Sock Ratchet websocket transport.",
                 "ext-memcached": "Install to use Memcached storage and MemQueue.",
-                "ext-redis": "Install to use Redis connections, storage, and reliable queues."
+                "ext-mongodb": "Install with mongodb/mongodb to use the MongoLink database adapter.",
+                "ext-redis": "Install to use Redis connections, storage, and reliable queues.",
+                "mongodb/mongodb": "Install with ext-mongodb to use the MongoLink database adapter."
             },
             "type": "library",
             "autoload": {
@@ -191,7 +193,7 @@
                 "issues": "https://github.com/BlueFissionTech/develation/issues",
                 "source": "https://github.com/BlueFissionTech/develation"
             },
-            "time": "2026-08-17T19:23:43+00:00"
+            "time": "2026-10-12T19:12:10+00:00"
         },
         {
             "name": "bluefission/simpleclients",
